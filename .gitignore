@@ -1,0 +1,5 @@
+.venv/
+__pycache__/
+isuperleague-club-streamlit/__pycache__/
+archieves/
+ai_env/
