@@ -4,6 +4,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
 from utils.data_loader import get_player_metric_categories
+#from ai import GemmaAnalyst, AnalysisTypes
+#import traceback
 
 # Define negative metrics (where lower values are better)
 NEGATIVE_METRICS = ['Own Goal', 'Yellow Card', 'Foul', 'Shoot Off Target']
@@ -78,6 +80,15 @@ def show_player_comparison(filtered_df):
     with tab3:
         st.subheader("📋 Detailed Statistics Comparison")
         show_table_comparison(comparison_df)
+    
+    # AI Insights Section
+    #st.markdown("---")
+    #st.subheader("🤖 AI-Powered Analysis")
+    #if st.button("🧠 Generate AI Insights", type="primary", help="Generate AI-powered professional analysis of the player comparison"):
+    #    show_ai_insights(comparison_df, filtered_df)
+    
+        
+            
 
 def show_radar_comparison(comparison_df, filtered_df):
     """Create radar chart for player comparison with normalized values"""
@@ -219,7 +230,7 @@ def show_bar_comparison(comparison_df, filtered_df):
             with cols[idx]:
                 create_player_performance_bar_chart(comparison_df, filtered_df, player_data, metric_categories)
 
-def create_player_performance_bar_chart(comparison_df, filtered_df, player_data, metric_categories):
+def create_player_performance_bar_chart(_comparison_df, filtered_df, player_data, metric_categories):
     """Create individual player performance chart with horizontal bars organized by categories"""
     
     player_name = player_data['Player Name']
@@ -412,9 +423,6 @@ def show_table_comparison(comparison_df):
                 # Apply color styling to the transposed table
                 def style_metric_cells(df_t):
                     """Apply color styling to metric cells based on performance"""
-                    # Create a DataFrame for styling
-                    styled_df = df_t.copy()
-                    
                     # Apply styling to each metric row
                     def apply_row_styling(row):
                         metric_name = row.name
@@ -442,5 +450,337 @@ def show_table_comparison(comparison_df):
                         best_value = comparison_df[metric].max()
                     
                     st.write(f"- **{metric}**: {best_player} ({best_value:.1f})")
-            else:
-                st.info(f"No metrics available for {category} category.")
+
+# def show_ai_insights(comparison_df, filtered_df):
+#     """Generate and display AI-powered insights for player comparison"""
+    
+#     if len(comparison_df) != 2:
+#         st.error("❌ AI insights work best with exactly 2 players. Please select 2 players for comparison.")
+#         return
+    
+#     # Create progress placeholder
+#     progress_placeholder = st.empty()
+#     result_placeholder = st.empty()
+    
+#     try:
+#         with progress_placeholder:
+#             with st.spinner("🤖 Initializing AI analyst..."):
+#                 # Get token from session state (primary source)
+#                 active_token = st.session_state.get('hf_token')
+                
+#                 # Show token status
+#                 if active_token:
+#                     st.info("🔗 Using HuggingFace token from session")
+#                 else:
+#                     st.warning("⚠️ No HuggingFace token found - using public models")
+#                     st.info("💡 Visit the AI Analyst page to configure authentication")
+                
+#                 # Initialize AI analyst with token
+#                 analyst = GemmaAnalyst(token=active_token)
+                
+#                 # Check system resources first
+#                 system_status = analyst.get_system_status()
+#                 print(system_status)
+#                 if not system_status['memory_status']['sufficient']:
+#                     st.error("❌ **Insufficient System Memory for AI Analysis**")
+#                     st.write(f"**Available Memory**: {system_status['memory_status']['available_gb']:.1f}GB")
+#                     st.write(f"**Required Memory**: {system_status['memory_status']['required_gb']:.1f}GB")
+                    
+#                     if system_status['recommendations']:
+#                         st.write("**Recommendations:**")
+#                         for rec in system_status['recommendations']:
+#                             st.write(f"• {rec}")
+                    
+#                     # Show fallback analysis
+#                     with st.expander("📊 Statistical Analysis (Fallback)", expanded=True):
+#                         show_statistical_fallback_analysis(comparison_df, filtered_df)
+#                     return
+        
+#         with progress_placeholder:
+#             with st.spinner("🧠 Generating professional AI analysis..."):
+                
+#                 # Get the two players
+#                 player1_data = comparison_df.iloc[0]
+#                 player2_data = comparison_df.iloc[1]
+                
+#                 # Prepare comparison metrics
+#                 info_columns = ['Name', 'Player Name', 'Team', 'Country', 'Age', 'Position', 'Picture Url']
+#                 metric_columns = [col for col in comparison_df.columns if col not in info_columns]
+                
+#                 # Prepare comparison data manually for better control
+#                 comparison_data = prepare_comparison_data(player1_data, player2_data, metric_columns)
+#                 st.info(f"📊 Comparison data prepared ({len(comparison_data)} characters, {len(metric_columns)} metrics)")
+                
+#                 # Create comparison prompt using the analyst's template
+#                 try:
+#                     prompt = analyst.prompt_templates.get_player_comparison_prompt(
+#                         player1_name=player1_data.get('Player Name', 'Player 1'),
+#                         player2_name=player2_data.get('Player Name', 'Player 2'),
+#                         comparison_data=comparison_data,
+#                         context="Indonesia Super League player comparison analysis for tactical decision-making"
+#                     )
+#                     st.info(f"✅ Prompt generated successfully ({len(prompt)} characters)")
+#                 except Exception as prompt_error:
+#                     st.error(f"❌ **Prompt Generation Error**: {str(prompt_error)}")
+#                     st.info("📊 **Falling back to statistical analysis**")
+#                     show_statistical_fallback_analysis(comparison_df, filtered_df)
+#                     return
+                
+#                 # Generate AI analysis with proper configuration
+#                 try:
+#                     st.info("🔄 Generating AI analysis...")
+#                     ai_analysis = analyst.generate_analysis(
+#                         prompt=prompt,
+#                         max_length=512,
+#                         temperature=0.7,
+#                         top_p=0.9
+#                     )
+#                     st.info(f"✅ AI analysis completed ({len(ai_analysis) if ai_analysis else 0} characters)")
+#                 except Exception as analysis_error:
+#                     st.error(f"❌ **AI Generation Error**: {str(analysis_error)}")
+#                     ai_analysis = None
+        
+#         # Clear progress and show results
+#         progress_placeholder.empty()
+        
+#         with result_placeholder:
+#             # AI Analysis Results
+#             st.success("✅ **AI Analysis Complete**")
+            
+#             with st.expander("🎯 **Professional AI Insights**", expanded=True):
+#                 # Format and display AI analysis
+#                 if ai_analysis and len(ai_analysis.strip()) > 50:
+#                     st.success(f"✅ **AI Analysis Generated** ({len(ai_analysis.strip())} characters)")
+#                     # Split analysis into sections if it contains markdown headers
+#                     if '##' in ai_analysis or '**' in ai_analysis:
+#                         st.markdown(ai_analysis)
+#                     else:
+#                         # Format as readable text if no markdown
+#                         st.write(ai_analysis)
+#                 elif ai_analysis:
+#                     # Show short analysis but warn
+#                     st.warning(f"⚠️ **Short AI Analysis** ({len(ai_analysis.strip())} characters)")
+#                     st.write(ai_analysis)
+#                     st.info("📊 **Also showing statistical analysis for completeness**")
+#                     show_statistical_fallback_analysis(comparison_df, filtered_df)
+#                 else:
+#                     # Fallback if AI analysis is empty or None
+#                     st.error("❌ **AI Analysis Failed**: No content generated")
+#                     st.info("📊 **Showing statistical analysis instead**")
+#                     show_statistical_fallback_analysis(comparison_df, filtered_df)
+            
+#             # Additional context
+#             with st.expander("ℹ️ **Analysis Details**"):
+#                 st.info(f"""
+#                 **Analysis Method**: AI-powered using {analyst.model_name}
+#                 **Players Analyzed**: {player1_data['Player Name']} vs {player2_data['Player Name']}
+#                 **Metrics Considered**: {len(metric_columns)} performance indicators
+#                 **Context**: Professional tactical and transfer analysis for Indonesia Super League
+#                 """)
+    
+#     except Exception as e:
+#         progress_placeholder.empty()
+        
+#         # Show error and fallback with better context
+#         error_message = str(e)
+#         st.error(f"❌ **AI Analysis Error**: {error_message}")
+        
+#         # Provide specific guidance based on error type
+#         if "token" in error_message.lower():
+#             st.warning("🔑 **Token Issue Detected**")
+#             st.info("""
+#             **Possible Solutions:**
+#             - Check if your HuggingFace token is valid
+#             - Visit the AI Analyst page to configure authentication
+#             - Ensure token has proper permissions
+#             """)
+#         elif "memory" in error_message.lower() or "cuda" in error_message.lower():
+#             st.warning("💾 **Memory Issue Detected**")
+#             st.info("""
+#             **Possible Solutions:**
+#             - Close other applications to free memory
+#             - Try using the main AI Analyst page for better resource management
+#             - System needs at least 4GB available RAM
+#             """)
+#         elif "connection" in error_message.lower() or "network" in error_message.lower():
+#             st.warning("🌐 **Network Issue Detected**")
+#             st.info("""
+#             **Possible Solutions:**
+#             - Check your internet connection
+#             - HuggingFace servers might be temporarily unavailable
+#             - Try again in a few moments
+#             """)
+        
+#         # Show detailed error in expander for debugging
+#         with st.expander("🔧 Technical Details"):
+#             st.code(traceback.format_exc())
+        
+#         # Always show statistical fallback
+#         st.info("📊 **Falling back to statistical analysis**")
+#         show_statistical_fallback_analysis(comparison_df, filtered_df)
+
+# def show_statistical_fallback_analysis(comparison_df, _filtered_df):
+#     """Show statistical analysis when AI is not available"""
+    
+#     if len(comparison_df) != 2:
+#         st.error("Statistical analysis requires exactly 2 players.")
+#         return
+    
+#     player1 = comparison_df.iloc[0]
+#     player2 = comparison_df.iloc[1]
+    
+#     # Basic comparison info
+#     st.markdown(f"### 📊 Statistical Comparison: {player1['Player Name']} vs {player2['Player Name']}")
+    
+#     # Player info comparison
+#     col1, col2 = st.columns(2)
+    
+#     with col1:
+#         st.markdown(f"**{player1['Player Name']}**")
+#         st.write(f"• Team: {player1['Team']}")
+#         st.write(f"• Position: {player1['Position']}")
+#         st.write(f"• Age: {player1['Age']}")
+#         st.write(f"• Appearances: {player1['Appearances']}")
+    
+#     with col2:
+#         st.markdown(f"**{player2['Player Name']}**")
+#         st.write(f"• Team: {player2['Team']}")
+#         st.write(f"• Position: {player2['Position']}")
+#         st.write(f"• Age: {player2['Age']}")
+#         st.write(f"• Appearances: {player2['Appearances']}")
+    
+#     # Performance category comparison
+#     metric_categories = get_player_metric_categories()
+    
+#     st.markdown("### 📈 Performance Category Winners")
+    
+#     category_winners = {}
+#     for category, metrics in metric_categories.items():
+#         available_metrics = [m for m in metrics if m in comparison_df.columns]
+        
+#         if available_metrics:
+#             # Calculate category totals for each player
+#             player1_total = sum(player1.get(metric, 0) for metric in available_metrics)
+#             player2_total = sum(player2.get(metric, 0) for metric in available_metrics)
+            
+#             if category in NEGATIVE_METRICS or any(m in NEGATIVE_METRICS for m in available_metrics):
+#                 # For discipline metrics, lower is better
+#                 winner = player1['Player Name'] if player1_total < player2_total else player2['Player Name']
+#                 winner_value = min(player1_total, player2_total)
+#             else:
+#                 # For other metrics, higher is better
+#                 winner = player1['Player Name'] if player1_total > player2_total else player2['Player Name']
+#                 winner_value = max(player1_total, player2_total)
+            
+#             category_winners[category] = {
+#                 'winner': winner,
+#                 'value': winner_value,
+#                 'p1_total': player1_total,
+#                 'p2_total': player2_total
+#             }
+    
+#     # Display category winners
+#     for category, result in category_winners.items():
+#         if result['p1_total'] != result['p2_total']:  # Only show if there's a difference
+#             st.write(f"**{category}**: {result['winner']} ({result['p1_total']:.1f} vs {result['p2_total']:.1f})")
+    
+#     # Key insights
+#     st.markdown("### 💡 Key Statistical Insights")
+    
+#     insights = []
+    
+#     # Age comparison
+#     if player1['Age'] != player2['Age']:
+#         younger = player1['Player Name'] if player1['Age'] < player2['Age'] else player2['Player Name']
+#         age_diff = abs(player1['Age'] - player2['Age'])
+#         insights.append(f"• **Age Advantage**: {younger} is {age_diff} years younger")
+    
+#     # Experience comparison
+#     if player1['Appearances'] != player2['Appearances']:
+#         more_experienced = player1['Player Name'] if player1['Appearances'] > player2['Appearances'] else player2['Player Name']
+#         exp_diff = abs(player1['Appearances'] - player2['Appearances'])
+#         insights.append(f"• **Experience**: {more_experienced} has {exp_diff} more appearances")
+    
+#     # Goals comparison
+#     if 'Goal' in comparison_df.columns:
+#         if player1['Goal'] != player2['Goal']:
+#             better_scorer = player1['Player Name'] if player1['Goal'] > player2['Goal'] else player2['Player Name']
+#             goal_diff = abs(player1['Goal'] - player2['Goal'])
+#             insights.append(f"• **Goals**: {better_scorer} has {goal_diff} more goals")
+    
+#     # Show insights
+#     for insight in insights:
+#         st.write(insight)
+    
+#     if not insights:
+#         st.info("Players show similar statistical profiles across major metrics.")
+    
+#     # Recommendations
+#     st.markdown("### 🎯 Statistical Recommendations")
+#     st.info("""
+#     **Note**: This is basic statistical analysis. For detailed tactical insights, professional scouting advice, 
+#     and playing style analysis, try the AI analysis when sufficient system memory is available.
+    
+#     **For AI Analysis**: Ensure at least 4GB available RAM and try closing other applications.
+#     """)
+
+# def format_ai_analysis_display(analysis_text: str) -> str:
+#     """Format AI analysis text for better display"""
+#     if not analysis_text:
+#         return "No analysis available."
+    
+#     # Clean up the text
+#     cleaned = analysis_text.strip()
+    
+#     # Add markdown formatting if not present
+#     if not any(marker in cleaned for marker in ['##', '**', '*', '-']):
+#         # Simple text - add some structure
+#         paragraphs = [p.strip() for p in cleaned.split('\n\n') if p.strip()]
+#         formatted_paragraphs = []
+        
+#         for i, paragraph in enumerate(paragraphs):
+#             if i == 0:
+#                 # First paragraph as introduction
+#                 formatted_paragraphs.append(f"**Analysis Overview:**\n{paragraph}")
+#             elif 'recommend' in paragraph.lower() or 'conclusion' in paragraph.lower():
+#                 # Recommendations/conclusions
+#                 formatted_paragraphs.append(f"**Recommendations:**\n{paragraph}")
+#             else:
+#                 # Regular paragraph
+#                 formatted_paragraphs.append(paragraph)
+        
+#         return '\n\n'.join(formatted_paragraphs)
+    
+#     return cleaned
+
+
+# def prepare_comparison_data(player1_data: pd.Series, player2_data: pd.Series, metrics: list) -> str:
+#     """Prepare player comparison data for AI analysis"""
+#     comparison_lines = ["Player Comparison:"]
+    
+#     comparison_lines.append(f"\n{player1_data.get('Player Name', 'Player 1')} vs {player2_data.get('Player Name', 'Player 2')}")
+#     comparison_lines.append(f"Teams: {player1_data.get('Team', 'N/A')} vs {player2_data.get('Team', 'N/A')}")
+#     comparison_lines.append(f"Ages: {player1_data.get('Age', 'N/A')} vs {player2_data.get('Age', 'N/A')}")
+#     comparison_lines.append(f"Positions: {player1_data.get('Position', 'N/A')} vs {player2_data.get('Position', 'N/A')}")
+#     comparison_lines.append(f"Appearances: {player1_data.get('Appearances', 'N/A')} vs {player2_data.get('Appearances', 'N/A')}")
+    
+#     comparison_lines.append(f"\nPerformance Metrics Comparison:")
+#     metrics_added = 0
+#     for metric in metrics:
+#         if metric in player1_data.index and metric in player2_data.index:
+#             val1 = player1_data.get(metric, 0)
+#             val2 = player2_data.get(metric, 0)
+            
+#             # Format values nicely
+#             val1_str = f"{val1:.1f}" if isinstance(val1, (int, float)) else str(val1)
+#             val2_str = f"{val2:.1f}" if isinstance(val2, (int, float)) else str(val2)
+            
+#             comparison_lines.append(f"  {metric}: {val1_str} vs {val2_str}")
+#             metrics_added += 1
+    
+#     if metrics_added == 0:
+#         comparison_lines.append("  No matching metrics found for comparison")
+#     else:
+#         comparison_lines.append(f"\nTotal metrics compared: {metrics_added}")
+    
+#     return "\n".join(comparison_lines)

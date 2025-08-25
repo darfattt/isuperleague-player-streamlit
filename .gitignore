@@ -3,3 +3,4 @@ __pycache__/
 isuperleague-club-streamlit/__pycache__/
 archieves/
 ai_env/
+.env

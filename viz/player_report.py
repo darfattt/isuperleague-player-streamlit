@@ -149,7 +149,7 @@ def get_position_options(general_position: str) -> List[str]:
     return all_options
 
 def generate_role_analysis(player_data: pd.Series, position: str, league_df: pd.DataFrame) -> Dict:
-    """Generate role-specific analysis based on position"""
+    """Generate role-specific analysis based on position with position-filtered comparisons"""
     
     role_definitions = {
         'Center Back': {
@@ -254,6 +254,10 @@ def generate_role_analysis(player_data: pd.Series, position: str, league_df: pd.
         }
     }
     
+    # Filter league data by same position for fair comparison
+    player_position = player_data['Position']
+    position_filtered_df = league_df[league_df['Position'] == player_position]
+    
     roles = []
     if position in role_definitions:
         for role_name, role_data in role_definitions[position].items():
@@ -263,8 +267,8 @@ def generate_role_analysis(player_data: pd.Series, position: str, league_df: pd.
             
             for metric, weight in zip(role_data['metrics'], role_data['weights']):
                 if metric in player_data.index and not pd.isna(player_data[metric]):
-                    # Calculate percentile vs league
-                    percentile = calculate_percentile(player_data[metric], league_df[metric])
+                    # Calculate percentile vs position-filtered league
+                    percentile = calculate_percentile(player_data[metric], position_filtered_df[metric])
                     weighted_score += percentile * weight
                     valid_metrics += weight
             
@@ -291,6 +295,21 @@ def calculate_percentile(value: float, league_values: pd.Series) -> float:
         return 0
     
     return (rank / total) * 100
+
+def categorize_metric(metric: str) -> str:
+    """Categorize metrics for sorting and organization"""
+    metric_categories = {
+        "⚽ Attack": ['Goal', 'Assist', 'Shoot On Target', 'Shoot Off Target', 'Penalty Goal', 'Create Chance'],
+        "🎯 Progression": ['Passing', 'Cross', 'Dribble Success', 'Ball Recovery', 'Free Kick'],
+        "🛡️ Defense": ['Tackle', 'Intercept', 'Clearance', 'Block', 'Block Cross', 'Header Won'],
+        "📊 General": ['Appearances', 'Yellow Card', 'Own Goal', 'Saves', 'Fouled', 'Foul']
+    }
+    
+    for category, metrics in metric_categories.items():
+        if metric in metrics:
+            return category
+    
+    return "📊 General"  # Default category
 
 def create_role_rating_bars(roles: List[Dict]) -> go.Figure:
     """Create horizontal bar chart for role ratings"""
@@ -349,7 +368,7 @@ def create_role_rating_bars(roles: List[Dict]) -> go.Figure:
     return fig
 
 def create_position_radar(player_data: pd.Series, position: str, league_df: pd.DataFrame) -> go.Figure:
-    """Create position-specific radar chart"""
+    """Create position-specific radar chart with position-filtered comparisons"""
     
     # Position-specific key metrics
     position_metrics = {
@@ -367,13 +386,17 @@ def create_position_radar(player_data: pd.Series, position: str, league_df: pd.D
     
     metrics = position_metrics.get(position, ['Goal', 'Assist', 'Passing', 'Tackle', 'Create Chance', 'Dribble Success'])
     
+    # Filter league data by same position for fair comparison
+    player_position = player_data['Position']
+    position_filtered_df = league_df[league_df['Position'] == player_position]
+    
     # Calculate percentiles for each metric
     categories = []
     values = []
     
     for metric in metrics:
-        if metric in player_data.index and metric in league_df.columns:
-            percentile = calculate_percentile(player_data[metric], league_df[metric])
+        if metric in player_data.index and metric in position_filtered_df.columns:
+            percentile = calculate_percentile(player_data[metric], position_filtered_df[metric])
             categories.append(metric)
             values.append(percentile)
     
@@ -420,11 +443,22 @@ def create_position_radar(player_data: pd.Series, position: str, league_df: pd.D
     return fig
 
 def create_comprehensive_stats_table(player_data: pd.Series, league_df: pd.DataFrame):
-    """Create comprehensive stats table with enhanced styling"""
+    """Create comprehensive stats table with Club Rank and position-based filtering"""
     
     # Get available metric columns (exclude info columns)
     info_columns = ['Name', 'Player Name', 'Team', 'Country', 'Age', 'Position', 'Picture Url']
     metric_columns = [col for col in league_df.columns if col not in info_columns]
+    
+    # Filter league data by same position
+    player_position = player_data['Position']
+    position_filtered_df = league_df[league_df['Position'] == player_position]
+    
+    # Filter club data by same team and position
+    player_team = player_data['Team']
+    club_filtered_df = league_df[
+        (league_df['Team'] == player_team) & 
+        (league_df['Position'] == player_position)
+    ]
     
     stats_data = []
     
@@ -433,125 +467,259 @@ def create_comprehensive_stats_table(player_data: pd.Series, league_df: pd.DataF
             value = player_data[metric]
             
             if not pd.isna(value):
-                # Calculate rank
-                better_players = (league_df[metric] > value).sum()
-                total_players = len(league_df[metric].dropna())
-                rank = better_players + 1
+                # League calculations (position-filtered)
+                position_metric_data = position_filtered_df[metric].dropna()
+                if len(position_metric_data) > 0:
+                    league_better_players = (position_metric_data > value).sum()
+                    league_total_players = len(position_metric_data)
+                    league_rank = league_better_players + 1
+                    league_percentile = calculate_percentile(value, position_metric_data)
+                    league_avg = position_metric_data.mean()
+                    league_rank_percentile = (1 - (league_rank - 1) / league_total_players) * 100
+                else:
+                    league_rank = league_total_players = league_percentile = league_avg = league_rank_percentile = 0
                 
-                # Calculate percentile
-                percentile = calculate_percentile(value, league_df[metric])
-                
-                # League average
-                league_avg = league_df[metric].mean()
-                
-                # Calculate rank percentile for color coding
-                rank_percentile = (1 - (rank - 1) / total_players) * 100
+                # Club calculations (team + position filtered)
+                club_metric_data = club_filtered_df[metric].dropna()
+                if len(club_metric_data) > 1:  # Need at least 2 players for meaningful comparison
+                    club_better_players = (club_metric_data > value).sum()
+                    club_total_players = len(club_metric_data)
+                    club_rank = club_better_players + 1
+                    club_rank_percentile = (1 - (club_rank - 1) / club_total_players) * 100
+                else:
+                    club_rank = club_total_players = club_rank_percentile = 0
                 
                 stats_data.append({
                     'Metric': metric,
                     'Player Value': f"{value:.1f}",
-                    'League Rank': rank,
-                    'Total Players': total_players, 
-                    'Rank Text': f"{rank} / {total_players}",
-                    'Percentile': percentile,
-                    'League Average': f"{league_avg:.1f}",
+                    'Club Rank': f"{club_rank} / {club_total_players}" if club_total_players > 1 else "Only player",
+                    'League Rank': f"{league_rank} / {league_total_players}" if league_total_players > 0 else "N/A",
+                    'Percentile': league_percentile,
+                    'League Average': f"{league_avg:.1f}" if league_avg > 0 else "N/A",
                     'vs Average': f"{((value - league_avg) / league_avg * 100):+.1f}%" if league_avg > 0 else "N/A",
-                    'Rank Percentile': rank_percentile
+                    'League Rank Percentile': league_rank_percentile,
+                    'Club Rank Percentile': club_rank_percentile,
+                    'Category': categorize_metric(metric)
                 })
     
     df = pd.DataFrame(stats_data)
     
-    # Create enhanced display table using columns and custom styling
+    # Sort by category and then by metric name
     if len(df) > 0:
+        # Define category order
+        category_order = ["⚽ Attack", "🎯 Progression", "🛡️ Defense", "📊 General"]
+        df['Category_Order'] = df['Category'].map({cat: i for i, cat in enumerate(category_order)})
+        df = df.sort_values(['Category_Order', 'Metric']).reset_index(drop=True)
+        
         st.markdown("### 📈 Performance Statistics")
+        st.markdown("*Comparing against players in the same position*")
         
-        #for idx, row in df.iterrows():
-            # col1, col2, col3, col4, col5, col6 = st.columns([2, 1, 1, 2, 1.5, 1.5])
-            
-            # with col1:
-            #     st.write(f"**{row['Metric']}**")
-            
-            # with col2:
-            #     st.write(row['Player Value'])
-            
-            # with col3:
-            #     # Color-coded rank
-            #     rank_color = get_rank_color(row['Rank Percentile'])
-            #     st.markdown(f"<span style='color: {rank_color}; font-weight: bold;'>{row['Rank Text']}</span>", 
-            #                unsafe_allow_html=True)
-            
-            # with col4:
-            #     # Progress bar for percentile
-            #     progress_color = get_percentile_color(row['Percentile'])
-            #     st.markdown(f"""
-            #         <div style='background-color: #e0e0e0; border-radius: 10px; height: 20px; width: 100%;'>
-            #             <div style='background-color: {progress_color}; height: 20px; border-radius: 10px; width: {row['Percentile']}%; 
-            #                         display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: bold;'>
-            #                 {row['Percentile']:.1f}%
-            #             </div>
-            #         </div>
-            #     """, unsafe_allow_html=True)
-            
-            # with col5:
-            #     st.write(row['League Average'])
-            
-            # with col6:
-            #     vs_avg = row['vs Average']
-            #     vs_color = '#28a745' if '+' in vs_avg and vs_avg != 'N/A' else '#dc3545' if '-' in vs_avg else '#6c757d'
-            #     st.markdown(f"<span style='color: {vs_color}; font-weight: bold;'>{vs_avg}</span>", 
-            #                unsafe_allow_html=True)
+        # Create tabs for different views
+        tab1, tab2 = st.tabs(["📊 Standard Table", "🎨 Visual Dashboard"])
         
-        # Add headers
-        #st.markdown("---")
-        col1, col2, col3, col4, col5, col6 = st.columns([2, 1, 1, 2, 1.5, 1.5])
-        with col1:
-            st.markdown("**Metric**")
-        with col2:
-            st.markdown("**Value**")
-        with col3:
-            st.markdown("**League Rank**")
-        with col4:
-            st.markdown("**Percentile**")
-        with col5:
-            st.markdown("**League Avg**")
-        with col6:
-            st.markdown("**vs Average**")
-        st.markdown("---")
+        with tab1:
+            # Prepare display DataFrame with additional formatting
+            display_df = df[['Category', 'Metric', 'Player Value', 'Club Rank', 'League Rank', 'Percentile', 'League Average', 'vs Average']].copy()
+            
+            # Keep percentile as numeric for ProgressColumn
+            display_df['Percentile_Value'] = df['Percentile']
+            
+            # Add color-coded rank columns
+            display_df['Club_Rank_Color'] = df.apply(lambda row: get_colored_rank_text(row['Club Rank'], row['Club Rank Percentile']), axis=1)
+            display_df['League_Rank_Color'] = df.apply(lambda row: get_colored_rank_text(row['League Rank'], row['League Rank Percentile']), axis=1)
+            
+            # Display the enhanced table
+            st.dataframe(
+                display_df[['Category', 'Metric', 'Player Value', 'Club_Rank_Color', 'League_Rank_Color', 'Percentile_Value', 'League Average', 'vs Average']],
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Category": st.column_config.TextColumn("Category", width="small"),
+                    "Metric": st.column_config.TextColumn("Metric", width="medium"), 
+                    "Player Value": st.column_config.NumberColumn("Value", width="small", format="%.1f"),
+                    "Club_Rank_Color": st.column_config.TextColumn("Club Rank", width="small"),
+                    "League_Rank_Color": st.column_config.TextColumn("League Rank", width="small"),
+                    "Percentile_Value": st.column_config.ProgressColumn(
+                        "Percentile",
+                        help="Performance percentile vs same position players",
+                        min_value=0,
+                        max_value=100,
+                        format="%.1f%%",
+                        width="small"
+                    ),
+                    "League Average": st.column_config.NumberColumn("League Avg", width="small", format="%.1f"),
+                    "vs Average": st.column_config.TextColumn("vs Average", width="small")
+                }
+            )
         
-        # Re-render the data below headers
-        for idx, row in df.iterrows():
-            col1, col2, col3, col4, col5, col6 = st.columns([2, 1, 1, 2, 1.5, 1.5])
-            
-            with col1:
-                st.write(f"**{row['Metric']}**")
-            
-            with col2:
-                st.write(row['Player Value'])
-            
-            with col3:
-                rank_color = get_rank_color(row['Rank Percentile'])
-                st.markdown(f"<span style='color: {rank_color}; font-weight: bold;'>{row['Rank Text']}</span>", 
-                           unsafe_allow_html=True)
-            
-            with col4:
-                progress_color = get_percentile_color(row['Percentile'])
-                st.markdown(f"""
-                    <div style='background-color: #e0e0e0; border-radius: 10px; height: 20px; width: 100%;'>
-                        <div style='background-color: {progress_color}; height: 20px; border-radius: 10px; width: {row['Percentile']}%; 
-                                    display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: bold;'>
-                            {row['Percentile']:.1f}%
-                        </div>
-                    </div>
-                """, unsafe_allow_html=True)
-            
-            with col5:
-                st.write(row['League Average'])
-            
-            with col6:
-                vs_avg = row['vs Average']
-                vs_color = '#28a745' if '+' in vs_avg and vs_avg != 'N/A' else '#dc3545' if '-' in vs_avg else '#6c757d'
-                st.markdown(f"<span style='color: {vs_color}; font-weight: bold;'>{vs_avg}</span>", 
-                           unsafe_allow_html=True)
+        with tab2:
+            # Create visual dashboard
+            create_visual_dashboard(player_data, df)
+
+
+def get_colored_rank_text(rank_text: str, rank_percentile: float) -> str:
+    """Get colored rank text based on percentile"""
+    if rank_percentile >= 75:
+        return f"🟢 {rank_text}"  # Green - Top 25%
+    elif rank_percentile >= 25:
+        return f"🟡 {rank_text}"  # Yellow - Middle 50%
+    else:
+        return f"🔴 {rank_text}"  # Red - Bottom 25%
+
+def create_visual_dashboard(player_data: pd.Series, stats_df: pd.DataFrame):
+    """Create visual dashboard with player info and charts"""
+    
+    # Player Info Card
+    st.markdown("### 👤 Player Profile")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.markdown(f"**🏆 {player_data['Player Name']}**")
+        st.markdown(f"⚽ **{player_data['Team']}**")
+    with col2:
+        st.markdown(f"📍 **Position**: {player_data['Position']}")
+        st.markdown(f"🌍 **Country**: {player_data['Country']}")
+    with col3:
+        st.markdown(f"🎂 **Age**: {player_data['Age']} years")
+    with col4:
+        # Overall performance indicator
+        overall_percentile = stats_df['Percentile'].mean()
+        st.metric("Overall Percentile", f"{overall_percentile:.1f}%")
+    
+    st.markdown("---")
+    
+    # Category-wise Performance Charts
+    st.markdown("### 📊 Performance by Category")
+    
+    # Group stats by category
+    category_performance = {}
+    categories = ["⚽ Attack", "🎯 Progression", "🛡️ Defense", "📊 General"]
+    
+    for category in categories:
+        category_data = stats_df[stats_df['Category'] == category]
+        if not category_data.empty:
+            avg_percentile = category_data['Percentile'].mean()
+            category_performance[category] = {
+                'percentile': avg_percentile,
+                'metrics': category_data[['Metric', 'Percentile', 'Club Rank Percentile', 'League Rank Percentile']].to_dict('records')
+            }
+    
+    # Create category comparison chart
+    if category_performance:
+        fig_categories = create_category_comparison_chart(category_performance)
+        st.plotly_chart(fig_categories, use_container_width=True)
+    
+    # Detailed metrics visualization
+    st.markdown("### 🎯 Detailed Performance Metrics")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Club vs League comparison
+        st.markdown("#### 🏟️ Club vs League Comparison")
+        fig_comparison = create_club_league_comparison(stats_df)
+        st.plotly_chart(fig_comparison, use_container_width=True)
+    
+    with col2:
+        # Top/Bottom metrics
+        st.markdown("#### ⭐ Strengths & Areas for Improvement")
+        
+        # Top 5 metrics
+        top_metrics = stats_df.nlargest(5, 'Percentile')[['Metric', 'Percentile']]
+        st.markdown("**🟢 Top Performing Metrics:**")
+        for _, row in top_metrics.iterrows():
+            st.markdown(f"• **{row['Metric']}**: {row['Percentile']:.1f}%")
+        
+        st.markdown("")
+        
+        # Bottom 5 metrics
+        bottom_metrics = stats_df.nsmallest(5, 'Percentile')[['Metric', 'Percentile']]
+        st.markdown("**🔴 Areas for Improvement:**")
+        for _, row in bottom_metrics.iterrows():
+            st.markdown(f"• **{row['Metric']}**: {row['Percentile']:.1f}%")
+
+def create_category_comparison_chart(category_performance: dict) -> go.Figure:
+    """Create horizontal bar chart comparing category performance"""
+    
+    categories = list(category_performance.keys())
+    percentiles = [category_performance[cat]['percentile'] for cat in categories]
+    
+    # Color coding based on performance
+    colors = []
+    for percentile in percentiles:
+        if percentile >= 75:
+            colors.append('#28a745')  # Green
+        elif percentile >= 50:
+            colors.append('#ffc107')  # Yellow
+        elif percentile >= 25:
+            colors.append('#fd7e14')  # Orange
+        else:
+            colors.append('#dc3545')  # Red
+    
+    fig = go.Figure()
+    
+    fig.add_trace(go.Bar(
+        y=categories,
+        x=percentiles,
+        orientation='h',
+        marker_color=colors,
+        text=[f"{p:.1f}%" for p in percentiles],
+        textposition='inside',
+        textfont=dict(color='white', size=12, family='Arial Bold')
+    ))
+    
+    fig.update_layout(
+        title="Category Performance Overview",
+        xaxis_title="Average Percentile",
+        yaxis_title="Category",
+        height=300,
+        xaxis=dict(range=[0, 100]),
+        showlegend=False
+    )
+    
+    return fig
+
+def create_club_league_comparison(stats_df: pd.DataFrame) -> go.Figure:
+    """Create comparison chart showing club vs league percentiles"""
+    
+    # Get top 10 metrics for comparison
+    top_metrics = stats_df.nlargest(10, 'Percentile')[['Metric', 'Club Rank Percentile', 'League Rank Percentile']]
+    
+    fig = go.Figure()
+    
+    # Club performance
+    fig.add_trace(go.Bar(
+        y=top_metrics['Metric'],
+        x=top_metrics['Club Rank Percentile'],
+        orientation='h',
+        name='Club Rank',
+        marker_color='rgba(55, 126, 184, 0.7)',
+        text=[f"{p:.1f}%" for p in top_metrics['Club Rank Percentile']],
+        textposition='inside'
+    ))
+    
+    # League performance
+    fig.add_trace(go.Bar(
+        y=top_metrics['Metric'],
+        x=top_metrics['League Rank Percentile'],
+        orientation='h',
+        name='League Rank',
+        marker_color='rgba(228, 26, 28, 0.7)',
+        text=[f"{p:.1f}%" for p in top_metrics['League Rank Percentile']],
+        textposition='inside'
+    ))
+    
+    fig.update_layout(
+        title="Club vs League Performance (Top 10 Metrics)",
+        xaxis_title="Percentile",
+        yaxis_title="Metrics",
+        height=400,
+        barmode='group',
+        xaxis=dict(range=[0, 100]),
+        legend=dict(x=0.7, y=1)
+    )
+    
+    return fig
 
 def get_rank_color(rank_percentile: float) -> str:
     """Get color for league rank based on percentile"""

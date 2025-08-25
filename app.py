@@ -13,6 +13,8 @@ from viz.profile_finder import show_profile_finder
 from viz.scatter_analysis import show_scatter_analysis
 from viz.player_report import show_player_report
 from viz.player_screener import show_player_screener
+from viz.team_analysis import render_team_analysis
+#from viz.ai_analyst import main as render_ai_analyst
 
 # Global stats calculation functions
 def calculate_overall_stats(df):
@@ -395,7 +397,7 @@ def main():
     
     page = st.sidebar.selectbox(
         "Select Page",
-        ["📈 Player Performance", "🔄 Player Comparison", "🎯 Profile Finder", "📊 Scatter Analysis", "👤 Player Report", "🔍 Player Screener"],
+        ["📈 Player Performance", "🔄 Player Comparison", "🎯 Profile Finder", "📊 Scatter Analysis", "👤 Player Report", "🔍 Player Screener", "⚽ Team Analysis"],
         index=0
     )
     
@@ -528,6 +530,11 @@ def main():
         show_player_report(filtered_df)
     elif page == "🔍 Player Screener":
         show_player_screener(filtered_df)
+    elif page == "⚽ Team Analysis":
+        render_team_analysis(filtered_df)
+    # elif page == "🤖 AI Analyst":
+    #     # AI Analyst needs unfiltered data for its own analysis and filtering
+    #     render_ai_analyst_page(df)
 
 def show_stats_dashboard(df):
     """Display the stats dashboard page"""
@@ -990,6 +997,375 @@ def show_metric_performance(df, metric):
     except Exception as e:
         st.error(f"❌ Error displaying {metric} performance: {str(e)}")
         st.info("Please try refreshing the page or adjusting your filters.")
+
+def render_ai_analyst_page(df):
+    """Render AI Analyst page with proper data integration"""
+    try:
+        # Clear main app's page config to avoid conflicts
+        # The AI Analyst has its own page config, but we'll override it
+        
+        # Add notice that this is integrated into main app
+        with st.container():
+            st.info("🔗 **AI Analyst** - Integrated with Indonesia Super League Analytics")
+            st.markdown("---")
+        
+        # Save the current data in a format that ai_analyst expects
+        # The ai_analyst module expects to load data itself, but we'll override this
+        
+        # Store the data in session state for ai_analyst to use
+        st.session_state.main_app_data = df
+        
+        # Call the AI analyst main function
+        # We'll need to modify how it loads data to use our existing data
+        render_ai_analyst_with_data(df)
+        
+    except Exception as e:
+        st.error(f"❌ Error loading AI Analyst: {str(e)}")
+        st.info("💡 AI Analyst requires additional dependencies. Please ensure all packages are installed.")
+        
+        with st.expander("🔧 Troubleshooting"):
+            st.code("""
+# Install required dependencies:
+pip install transformers torch psutil huggingface_hub
+
+# Or run the setup script:
+python setup_ai_environment.py
+            """)
+        
+        # Show basic info about AI Analyst features
+        st.markdown("""
+        ### 🤖 AI Analyst Features
+        
+        The AI Analyst provides professional football analysis using advanced AI models:
+        
+        - **Player Performance Analysis**: Detailed individual player insights
+        - **Team Analysis**: Tactical and strategic team evaluation  
+        - **Scout Reports**: Professional scouting recommendations
+        - **Player Comparison**: Head-to-head AI-powered comparisons
+        - **Tactical Analysis**: Playing style and formation insights
+        - **Custom Queries**: Ask specific football questions
+        
+        **Requirements**: 4GB+ RAM, Hugging Face account (optional)
+        """)
+
+def render_ai_analyst_with_data(df):
+    """Modified AI analyst that uses existing data instead of loading its own"""
+    
+    # Import the AI analyst components
+    try:
+        import sys
+        from pathlib import Path
+        from utils.data_loader import PlayerDataLoader
+        from utils.hf_auth import get_hf_auth, quick_token_test
+        from ai.analyst import GemmaAnalyst
+        from ai.analysis_types import AnalysisType, AnalysisTypes
+        from datetime import datetime
+        import plotly.express as px
+        import plotly.graph_objects as go
+        
+    except ImportError as e:
+        st.error(f"Missing dependencies: {str(e)}")
+        st.stop()
+    
+    # Set up the page header
+    st.title("🤖 AI Football Performance Analyst")
+    st.markdown("### Powered by Google Gemma-3-270M | Indonesia Super League Analysis")
+    
+    # Initialize session state for AI analyst
+    if 'analysis_history' not in st.session_state:
+        st.session_state.analysis_history = []
+    if 'ai_analyst' not in st.session_state:
+        st.session_state.ai_analyst = None
+    if 'hf_token' not in st.session_state:
+        st.session_state.hf_token = None
+    if 'token_validated' not in st.session_state:
+        st.session_state.token_validated = False
+    
+    # Add Authentication Section
+    st.markdown("---")
+    render_token_authentication_section()
+    
+    # Create a mock data loader that uses our existing data
+    class MockDataLoader:
+        def __init__(self, df):
+            self.df = df
+        
+        def get_teams(self):
+            return sorted(self.df['Team'].unique().tolist())
+        
+        def get_positions(self):
+            return sorted(self.df['Position'].unique().tolist())
+        
+        def get_all_metrics(self):
+            info_columns = ['Name', 'Player Name', 'Team', 'Country', 'Age', 'Position', 'Picture Url']
+            return [col for col in self.df.columns if col not in info_columns]
+        
+        def get_metric_categories(self):
+            return {
+                'Attack': ['Goal', 'Assist', 'Shoot On Target', 'Shoot Off Target', 'Penalty Goal', 'Create Chance'],
+                'Defense': ['Block', 'Block Cross', 'Clearance', 'Tackle', 'Intercept', 'Ball Recovery', 'Header Won'],
+                'Progression': ['Passing', 'Cross', 'Dribble Success', 'Free Kick'],
+                'Discipline': ['Foul', 'Fouled', 'Yellow Card', 'Own Goal'],
+                'Goalkeeper': ['Saves']
+            }
+    
+    # Create mock data loader
+    data_loader = MockDataLoader(df)
+    
+    # Initialize AI Analyst with proper token management
+    if st.session_state.ai_analyst is None:
+        with st.spinner("Initializing AI Analyst... This may take a few minutes on first run."):
+            try:
+                # Get token with proper priority: Session > Environment
+                session_token = st.session_state.get('hf_token')
+                env_token = get_environment_token()
+                
+                # Use session token if available, otherwise fall back to environment
+                active_token = session_token if session_token else env_token
+                
+                # Show which token is being used
+                if active_token:
+                    token_source = "session" if session_token else "environment"
+                    st.info(f"🔗 Using HuggingFace token from {token_source}")
+                else:
+                    st.warning("⚠️ No HuggingFace token found - using public models only")
+                
+                st.session_state.ai_analyst = GemmaAnalyst(token=active_token)
+                
+                # Check system status
+                system_status = st.session_state.ai_analyst.get_system_status()
+                
+                if not system_status['memory_status'].get('sufficient', False):
+                    st.warning("⚠️ Insufficient system memory detected - AI will use fallback mode")
+                
+                # Try to initialize
+                init_success = st.session_state.ai_analyst.initialize()
+                
+                if init_success:
+                    st.success("✅ AI model loaded successfully!")
+                else:
+                    st.warning("⚠️ AI model could not be loaded - using fallback mode")
+                    
+            except Exception as e:
+                st.error(f"Error initializing AI: {str(e)}")
+                st.info("Continuing with statistical analysis mode...")
+    
+    # Simple interface for now - focus on player analysis
+    st.subheader("👤 AI Player Analysis")
+    
+    # Player selection
+    teams = data_loader.get_teams()
+    selected_team = st.selectbox("Select Team", ["All Teams"] + teams)
+    
+    if selected_team == "All Teams":
+        available_players = df['Player Name'].tolist()
+    else:
+        team_players = df[df['Team'] == selected_team]
+        available_players = team_players['Player Name'].tolist()
+    
+    selected_player = st.selectbox("Select Player", available_players)
+    
+    if selected_player:
+        player_data = df[df['Player Name'] == selected_player].iloc[0]
+        
+        # Show player info
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Team", player_data['Team'])
+        with col2:
+            st.metric("Position", player_data['Position'])
+        with col3:
+            st.metric("Age", player_data['Age'])
+        with col4:
+            st.metric("Appearances", player_data['Appearances'])
+        
+        # Additional context
+        context = st.text_area(
+            "Additional Context (Optional)",
+            placeholder="e.g., Recent form, injury concerns, tactical role..."
+        )
+        
+        if st.button("🔍 Generate AI Player Analysis", type="primary"):
+            with st.spinner("AI is analyzing the player's performance..."):
+                try:
+                    if st.session_state.ai_analyst:
+                        analysis = st.session_state.ai_analyst.analyze_player_performance(player_data, context)
+                        
+                        st.markdown("### 📊 AI Analysis Results")
+                        st.markdown(analysis)
+                        
+                        # Save to history (simplified)
+                        entry = {
+                            'type': 'Player Analysis',
+                            'subject': selected_player,
+                            'analysis': analysis,
+                            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                        }
+                        st.session_state.analysis_history.append(entry)
+                        
+                    else:
+                        st.error("AI Analyst not available")
+                        
+                except Exception as e:
+                    st.error(f"Error during analysis: {str(e)}")
+                    st.info("Try checking system resources or using simpler analysis.")
+
+def render_token_authentication_section():
+    """Render HuggingFace token authentication section"""
+    
+    st.subheader("🔑 HuggingFace Authentication")
+    
+    # Get token from various sources
+    env_token = get_environment_token()
+    session_token = st.session_state.get('hf_token')
+    
+    # Determine active token and source
+    active_token = None
+    token_source = None
+    
+    if session_token:
+        active_token = session_token
+        token_source = "Session (Manual Input)"
+    elif env_token:
+        active_token = env_token
+        token_source = "Environment Variable"
+    
+    # Display current token status
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        if active_token:
+            # Mask token for display
+            masked_token = active_token[:8] + "..." + active_token[-4:]
+            st.success(f"✅ **Token Active**: `{masked_token}`")
+            st.caption(f"📍 **Source**: {token_source}")
+            
+            # Show validation status if available
+            if st.session_state.get('token_validated'):
+                st.info("🎯 **Status**: Token validated successfully")
+            else:
+                st.warning("⚠️ **Status**: Token not yet validated")
+        else:
+            st.warning("⚠️ **No Token Found**")
+            st.caption("AI analysis will use fallback mode or public models only")
+    
+    with col2:
+        # Test token button
+        if active_token and st.button("🔍 Test Token", help="Validate token with HuggingFace API"):
+            test_token_functionality(active_token)
+    
+    # Token input section
+    with st.expander("🔧 **Token Management**", expanded=not bool(active_token)):
+        
+        # Manual token input
+        manual_token = st.text_input(
+            "Enter HuggingFace Token:",
+            type="password",
+            placeholder="hf_...",
+            help="Get your token from https://huggingface.co/settings/tokens",
+            value=""
+        )
+        
+        # Action buttons
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            if st.button("💾 Save Token", disabled=not manual_token):
+                if manual_token:
+                    if validate_token_format(manual_token):
+                        st.session_state.hf_token = manual_token
+                        st.session_state.token_validated = False
+                        st.session_state.ai_analyst = None  # Force re-initialization
+                        st.success("✅ Token saved to session!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Invalid token format. Should start with 'hf_'")
+        
+        with col2:
+            if st.button("🧪 Test Only", disabled=not manual_token):
+                if manual_token:
+                    test_token_functionality(manual_token, save_to_session=False)
+        
+        with col3:
+            if st.button("🗑️ Clear Token"):
+                st.session_state.hf_token = None
+                st.session_state.token_validated = False
+                st.session_state.ai_analyst = None  # Force re-initialization
+                st.success("🗑️ Token cleared from session")
+                st.rerun()
+        
+        # Help section
+        if st.button("❓ Need Help?"):
+            st.session_state.show_token_help = not st.session_state.get('show_token_help', False)
+        
+        if st.session_state.get('show_token_help', False):
+            st.markdown("""
+            ### 📚 HuggingFace Token Setup
+            
+            1. **Create Account**: Sign up at [huggingface.co](https://huggingface.co)
+            2. **Generate Token**: Go to [Settings > Access Tokens](https://huggingface.co/settings/tokens)
+            3. **Copy Token**: Token should start with `hf_`
+            4. **Paste Here**: Enter token in the field above
+            
+            ### 🔒 Token Security
+            - Tokens are stored in session memory only
+            - Environment variables are preferred for production
+            - Never share your token publicly
+            
+            ### ⚡ Token Priority
+            1. **Manual Input** (this form) - Highest priority
+            2. **Environment Variable** (.env file) - Fallback
+            3. **No Token** - Public models only
+            """)
+
+def get_environment_token():
+    """Get HuggingFace token from environment variables"""
+    import os
+    return os.getenv('HF_TOKEN') or os.getenv('HUGGINGFACE_HUB_TOKEN')
+
+def validate_token_format(token):
+    """Validate HuggingFace token format"""
+    if not token or not isinstance(token, str):
+        return False
+    return token.startswith('hf_') and len(token) >= 20
+
+def test_token_functionality(token, save_to_session=True):
+    """Test token with HuggingFace API"""
+    
+    with st.spinner("🔄 Testing token with HuggingFace API..."):
+        try:
+            # Try to import huggingface_hub for testing
+            try:
+                from huggingface_hub import whoami
+                
+                # Test the token
+                user_info = whoami(token=token)
+                
+                if user_info:
+                    st.success("✅ **Token Valid!**")
+                    
+                    user_name = user_info.get('name', 'Unknown')
+                    user_type = user_info.get('type', 'user')
+                    
+                    st.info(f"👤 **Logged in as**: {user_name} ({user_type})")
+                    
+                    if save_to_session:
+                        st.session_state.hf_token = token
+                        st.session_state.token_validated = True
+                        st.balloons()
+                else:
+                    st.error("❌ Token test failed - no user info returned")
+                    
+            except ImportError:
+                st.warning("⚠️ Cannot test token - huggingface_hub not installed")
+                st.info("Token format appears valid, proceeding with assumption it works")
+                if save_to_session:
+                    st.session_state.hf_token = token
+                    st.session_state.token_validated = False
+                    
+        except Exception as e:
+            st.error(f"❌ **Token Test Failed**: {str(e)}")
+            st.caption("Check token validity at HuggingFace settings")
 
 if __name__ == "__main__":
     main()
