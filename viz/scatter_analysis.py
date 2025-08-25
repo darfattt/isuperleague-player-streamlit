@@ -5,6 +5,46 @@ import plotly.graph_objects as go
 import numpy as np
 from typing import List, Dict
 
+def detect_theme():
+    """Detect if the current theme is light or dark"""
+    try:
+        # Try to detect theme from Streamlit's session state or config
+        if hasattr(st, '_config') and hasattr(st._config, 'get_option'):
+            theme = st._config.get_option('theme.base')
+            if theme == 'dark':
+                return 'dark'
+        
+        # Check if user has set a preference in session state
+        if 'theme' in st.session_state:
+            return st.session_state.theme
+        
+        # Default to light theme
+        return 'light'
+    except:
+        # Fallback to light theme if detection fails
+        return 'light'
+
+def get_theme_colors(theme='light'):
+    """Get color scheme based on current theme"""
+    if theme == 'dark':
+        return {
+            'background': 'rgba(14, 17, 23, 1)',  # Dark background
+            'grid': '#404040',                    # Medium gray for grid
+            'text': '#FFFFFF',                    # White text
+            'bg_points': '#666666',               # Lighter gray for visibility on dark
+            'point_border': '#888888',            # Medium gray border
+            'subtitle_text': '#B0B0B0'           # Light gray for subtitles
+        }
+    else:  # light theme
+        return {
+            'background': 'white',                # White background
+            'grid': '#F8F9FA',                   # Very light gray for grid  
+            'text': '#2C3E50',                   # Dark blue-gray text
+            'bg_points': '#9E9E9E',              # Medium gray points
+            'point_border': 'white',             # White border
+            'subtitle_text': '#7F8C8D'           # Gray for subtitles
+        }
+
 def show_scatter_analysis(filtered_df):
     """
     Advanced scatter plot analysis for player performance data
@@ -99,7 +139,7 @@ def show_scatter_analysis(filtered_df):
             if selected_players:
                 for player in selected_players:
                     highlighted_players.add(player)
-                    highlight_colors[player] = '#FF6B9D'  # Pink for selected players
+                    highlight_colors[player] = '#DC143C'  # Crimson red for selected players
                     highlight_reasons[player] = 'Selected Player'
         
         with col2:
@@ -117,7 +157,7 @@ def show_scatter_analysis(filtered_df):
                 for player in team_players:
                     if player not in highlighted_players:  # Don't override individual selections
                         highlighted_players.add(player)
-                        highlight_colors[player] = '#4ECDC4'  # Cyan for team selections
+                        highlight_colors[player] = '#1E90FF'  # Blue for team selections
                         highlight_reasons[player] = f'Team: {filtered_df[filtered_df["Player Name"] == player]["Team"].iloc[0]}'
         
         st.markdown("---")
@@ -137,7 +177,7 @@ def show_scatter_analysis(filtered_df):
                 for player in top_x_players:
                     if player not in highlighted_players:
                         highlighted_players.add(player)
-                        highlight_colors[player] = '#1a9641'  # Green for top performers
+                        highlight_colors[player] = '#228B22'  # Forest green for top performers
                         highlight_reasons[player] = f'Top 10 {x_axis}'
             
             if bottom_x:
@@ -145,7 +185,7 @@ def show_scatter_analysis(filtered_df):
                 for player in bottom_x_players:
                     if player not in highlighted_players:
                         highlighted_players.add(player)
-                        highlight_colors[player] = '#d73027'  # Red for bottom performers
+                        highlight_colors[player] = '#FF4500'  # Orange red for bottom performers
                         highlight_reasons[player] = f'Bottom 10 {x_axis}'
         
         with col2:
@@ -159,7 +199,7 @@ def show_scatter_analysis(filtered_df):
                 for player in top_y_players:
                     if player not in highlighted_players:
                         highlighted_players.add(player)
-                        highlight_colors[player] = '#1a9641'  # Green for top performers
+                        highlight_colors[player] = '#228B22'  # Forest green for top performers
                         highlight_reasons[player] = f'Top 10 {y_axis}'
             
             if bottom_y:
@@ -167,7 +207,7 @@ def show_scatter_analysis(filtered_df):
                 for player in bottom_y_players:
                     if player not in highlighted_players:
                         highlighted_players.add(player)
-                        highlight_colors[player] = '#d73027'  # Red for bottom performers
+                        highlight_colors[player] = '#FF4500'  # Orange red for bottom performers
                         highlight_reasons[player] = f'Bottom 10 {y_axis}'
         
         st.markdown("**🎯 Combined Performance**")
@@ -192,7 +232,7 @@ def show_scatter_analysis(filtered_df):
             for player in top_combined_players:
                 if player not in highlighted_players:
                     highlighted_players.add(player)
-                    highlight_colors[player] = '#FFD93D'  # Gold for top combined
+                    highlight_colors[player] = '#DAA520'  # Goldenrod for top combined
                     highlight_reasons[player] = f'Top 10 Combined ({x_axis} + {y_axis})'
         
         if bottom_combined:
@@ -202,7 +242,7 @@ def show_scatter_analysis(filtered_df):
             for player in bottom_combined_players:
                 if player not in highlighted_players:
                     highlighted_players.add(player)
-                    highlight_colors[player] = '#FF8C42'  # Orange for bottom combined
+                    highlight_colors[player] = '#FF6347'  # Tomato for bottom combined
                     highlight_reasons[player] = f'Bottom 10 Combined ({x_axis} + {y_axis})'
         
         st.markdown("---")
@@ -228,7 +268,7 @@ def show_scatter_analysis(filtered_df):
             for player in u23_players:
                 if player not in highlighted_players:
                     highlighted_players.add(player)
-                    highlight_colors[player] = '#6BCF7F'  # Light green for young talent
+                    highlight_colors[player] = '#32CD32'  # Lime green for young talent
                     highlight_reasons[player] = f'U23 Player (Age: {filtered_df[filtered_df["Player Name"] == player]["Age"].iloc[0]})'
         
         if highlight_u20:
@@ -236,7 +276,7 @@ def show_scatter_analysis(filtered_df):
             for player in u20_players:
                 if player not in highlighted_players:
                     highlighted_players.add(player)
-                    highlight_colors[player] = '#00D4FF'  # Bright blue for very young talent
+                    highlight_colors[player] = '#4169E1'  # Royal blue for very young talent
                     highlight_reasons[player] = f'U20 Player (Age: {filtered_df[filtered_df["Player Name"] == player]["Age"].iloc[0]})'
         
         st.markdown("---")
@@ -304,12 +344,21 @@ def show_scatter_analysis(filtered_df):
 def create_advanced_scatter_plot(df, x_axis, y_axis, highlighted_players, highlight_colors, 
                                 highlight_reasons, show_trendline, show_median_lines, 
                                 show_names, default_opacity, highlight_opacity):
-    """Create the advanced scatter plot with all highlighting options"""
+    """Create enhanced scatter plot with professional styling and smart labeling"""
     
     fig = go.Figure()
     
-    # Default color for non-highlighted players
-    default_color = '#888888'
+    # Detect current theme and get appropriate colors
+    current_theme = detect_theme()
+    theme_colors = get_theme_colors(current_theme)
+    
+    # Theme-aware color scheme
+    default_color = theme_colors['bg_points']      # Background points color
+    grid_color = theme_colors['grid']              # Grid color
+    text_color = theme_colors['text']              # Text color
+    subtitle_color = theme_colors['subtitle_text'] # Subtitle color
+    point_border = theme_colors['point_border']    # Point border color
+    bg_color = theme_colors['background']          # Background color
     
     # Add non-highlighted players first (so they appear behind highlighted ones)
     non_highlighted_df = df[~df['Player Name'].isin(highlighted_players)]
@@ -321,15 +370,16 @@ def create_advanced_scatter_plot(df, x_axis, y_axis, highlighted_players, highli
             mode='markers',
             marker=dict(
                 color=default_color,
-                size=8,
-                opacity=default_opacity,
-                line=dict(width=0.5, color='white')
+                size=15,  # Keep size 15 as requested
+                opacity=0.4,  # Fill opacity for clear visibility of distribution
+                line=dict(width=1, color=point_border)  # Theme-aware border color
             ),
             text=[
-                f"<b>{row['Player Name']}</b><br>"
-                f"Team: {row['Team']}<br>"
-                f"{x_axis}: {row[x_axis]:.1f}<br>"
-                f"{y_axis}: {row[y_axis]:.1f}"
+                f"<b style='color: {text_color}'>{row['Player Name']}</b><br>"
+                f"<span style='color: {subtitle_color}'>Team: {row['Team']}</span><br>"
+                f"<span style='color: {subtitle_color}'>Position: {row['Position']}</span><br>"
+                f"<span style='color: {subtitle_color}'>{x_axis}: {row[x_axis]:.1f}</span><br>"
+                f"<span style='color: {subtitle_color}'>{y_axis}: {row[y_axis]:.1f}</span>"
                 for _, row in non_highlighted_df.iterrows()
             ],
             hovertemplate='%{text}<extra></extra>',
@@ -345,41 +395,58 @@ def create_advanced_scatter_plot(df, x_axis, y_axis, highlighted_players, highli
             color_groups[color] = []
         color_groups[color].append(player)
     
-    # Create a trace for each color group
+    # Professional color scheme for highlights
     color_names = {
-        '#FF6B9D': 'Selected Players',
-        '#4ECDC4': 'Team Players',
-        '#1a9641': 'Top Performers',
-        '#d73027': 'Bottom Performers',
-        '#FFD93D': 'Top Combined',
-        '#FF8C42': 'Bottom Combined',
-        '#6BCF7F': 'U23 Players',
-        '#00D4FF': 'U20 Players'
+        '#DC143C': 'Selected Players',      # Crimson red - primary highlight
+        '#1E90FF': 'Team Players',          # Dodger blue - team selections
+        '#228B22': 'Top Performers',        # Forest green - top performers
+        '#FF4500': 'Bottom Performers',     # Orange red - needs improvement
+        '#DAA520': 'Top Combined',          # Goldenrod - excellent combined
+        '#FF6347': 'Bottom Combined',       # Tomato - combined improvement needed
+        '#32CD32': 'U23 Players',           # Lime green - young talent
+        '#4169E1': 'U20 Players'            # Royal blue - very young talent
+    }
+    
+    # Update highlight_colors to use new professional colors
+    professional_color_mapping = {
+        '#FF6B9D': '#DC143C',  # Selected Players
+        '#4ECDC4': '#1E90FF',  # Team Players
+        '#1a9641': '#228B22',  # Top Performers
+        '#d73027': '#FF4500',  # Bottom Performers
+        '#FFD93D': '#DAA520',  # Top Combined
+        '#FF8C42': '#FF6347',  # Bottom Combined
+        '#6BCF7F': '#32CD32',  # U23 Players
+        '#00D4FF': '#4169E1'   # U20 Players
     }
     
     for color, players in color_groups.items():
         highlighted_subset = df[df['Player Name'].isin(players)]
+        
+        # Map old colors to new professional colors
+        professional_color = professional_color_mapping.get(color, color)
         
         fig.add_trace(go.Scatter(
             x=highlighted_subset[x_axis],
             y=highlighted_subset[y_axis],
             mode='markers',
             marker=dict(
-                color=color,
-                size=12,
-                opacity=highlight_opacity,
-                line=dict(width=1, color='white')
+                color=professional_color,
+                size=15,  # Keep size 15 as requested
+                opacity=0.9,  # Slightly reduced fill opacity for better border definition
+                line=dict(width=2, color=point_border)  # Theme-aware border color
             ),
             text=[
-                f"<b>{row['Player Name']}</b><br>"
-                f"Team: {row['Team']}<br>"
-                f"{x_axis}: {row[x_axis]:.1f}<br>"
-                f"{y_axis}: {row[y_axis]:.1f}<br>"
-                f"Highlight: {highlight_reasons.get(row['Player Name'], 'Unknown')}"
+                f"<b style='color: {text_color}'>{row['Player Name']}</b><br>"
+                f"<span style='color: {subtitle_color}'>Team: {row['Team']}</span><br>"
+                f"<span style='color: {subtitle_color}'>Position: {row['Position']}</span><br>"
+                f"<span style='color: {subtitle_color}'>Age: {row['Age']}</span><br>"
+                f"<span style='color: {subtitle_color}'>{x_axis}: {row[x_axis]:.1f}</span><br>"
+                f"<span style='color: {subtitle_color}'>{y_axis}: {row[y_axis]:.1f}</span><br>"
+                f"<span style='color: {professional_color}; font-weight: bold'>Highlight: {highlight_reasons.get(row['Player Name'], 'Unknown')}</span>"
                 for _, row in highlighted_subset.iterrows()
             ],
             hovertemplate='%{text}<extra></extra>',
-            name=color_names.get(color, 'Highlighted'),
+            name=color_names.get(professional_color, 'Highlighted'),
             showlegend=True
         ))
     
@@ -429,69 +496,174 @@ def create_advanced_scatter_plot(df, x_axis, y_axis, highlighted_players, highli
             annotation_position="right"
         )
     
-    # Add player name labels based on show_names setting
-    if show_names == "Always":
-        # Limit to top 30 players by combined score to prevent performance issues
-        df_copy = df.copy()
-        df_copy['combined_score'] = (df_copy[x_axis] + df_copy[y_axis]) / 2
-        players_to_label = df_copy.nlargest(30, 'combined_score')
-    elif show_names == "Only Highlighted":
-        # Debug: Check if highlighted_players has values
-        if highlighted_players:
-            players_to_label = df[df['Player Name'].isin(highlighted_players)]
-        else:
-            players_to_label = pd.DataFrame()  # Empty if no highlights
-    else:  # Never - but still show highlighted players automatically
-        if highlighted_players:
-            players_to_label = df[df['Player Name'].isin(highlighted_players)]
-        else:
-            players_to_label = pd.DataFrame()  # Empty if no highlights
+    # Smart labeling with overlap prevention
+    players_to_label = get_players_for_labeling(df, highlighted_players, show_names, x_axis, y_axis)
     
     if len(players_to_label) > 0:
-        # Limit total annotations for performance (max 50)
-        max_annotations = min(50, len(players_to_label))
-        players_to_process = players_to_label.head(max_annotations)
+        # Apply smart label positioning
+        label_positions = calculate_smart_label_positions(players_to_label, x_axis, y_axis)
         
-        for i, (_, player_row) in enumerate(players_to_process.iterrows()):
-            # Alternate positioning to reduce overlap
-            x_offset = 15 if i % 2 == 0 else -15
-            y_offset = 12 if i % 4 < 2 else -12
-            
-            # Ensure we have valid coordinates
-            if pd.isna(player_row[x_axis]) or pd.isna(player_row[y_axis]):
-                continue
+        for _, player_row in players_to_label.iterrows():
+            player_name = player_row['Player Name']
+            if player_name in label_positions:
+                x_pos, y_pos = player_row[x_axis], player_row[y_axis]
+                x_offset, y_offset = label_positions[player_name]
                 
-            fig.add_annotation(
-                x=player_row[x_axis],
-                y=player_row[y_axis],
-                text=player_row['Player Name'],
-                showarrow=False,
-                font=dict(
-                    size=9,
-                    color='#333333',
-                    family='Arial Bold'
-                ),
-                xshift=x_offset,
-                yshift=y_offset
-            )
+                # Ensure we have valid coordinates
+                if pd.isna(x_pos) or pd.isna(y_pos):
+                    continue
+                
+                # Use red color for highlighted players, theme-aware color for others
+                label_color = '#DC143C' if player_name in highlighted_players else text_color
+                
+                fig.add_annotation(
+                    x=x_pos,
+                    y=y_pos,
+                    text=f"<b>{player_name}</b>",
+                    showarrow=False,
+                    font=dict(
+                        size=10,
+                        color=label_color,
+                        family='Arial'
+                    ),
+                    xshift=x_offset,
+                    yshift=y_offset
+                )
     
-    # Update layout
+    # Create contextual subtitle with data information
+    position_info = df['Position'].unique()
+    team_count = df['Team'].nunique()
+    age_range = f"{df['Age'].min()}-{df['Age'].max()}"
+    
+    subtitle = f"Players aged {age_range} | {team_count} teams | Positions: {', '.join(position_info[:3])}"
+    if len(position_info) > 3:
+        subtitle += f" (+{len(position_info)-3} more)"
+    
+    # Update layout with theme-aware styling
     fig.update_layout(
-        title=f"{x_axis} vs {y_axis}",
-        xaxis_title=x_axis,
-        yaxis_title=y_axis,
-        height=600,
+        title=dict(
+            text=f"<b style='font-size: 20px; color: {text_color}'>{x_axis} vs {y_axis}</b><br>"
+                 f"<span style='font-size: 14px; color: {subtitle_color}'>{subtitle}</span>",
+            x=0.05,
+            xanchor='left'
+        ),
+        xaxis=dict(
+            title=dict(
+                text=f"<b>{x_axis}</b>",
+                font=dict(size=14, color=text_color)
+            ),
+            gridcolor=grid_color,
+            gridwidth=1,
+            showgrid=True,
+            zeroline=False,
+            tickfont=dict(size=12, color=text_color)
+        ),
+        yaxis=dict(
+            title=dict(
+                text=f"<b>{y_axis}</b>",
+                font=dict(size=14, color=text_color)
+            ),
+            gridcolor=grid_color,
+            gridwidth=1,
+            showgrid=True,
+            zeroline=False,
+            tickfont=dict(size=12, color=text_color)
+        ),
+        height=650,
         hovermode='closest',
+        plot_bgcolor=bg_color,
+        paper_bgcolor=bg_color,
         legend=dict(
             orientation="h",
             yanchor="bottom",
-            y=1.02,
-            xanchor="right",
-            x=1
-        )
+            y=-0.15,
+            xanchor="center",
+            x=0.5,
+            font=dict(size=11, color=text_color),
+            bgcolor=f'rgba(128,128,128,0.1)' if current_theme == 'dark' else 'rgba(255,255,255,0.8)',
+            bordercolor=f'rgba(255,255,255,0.2)' if current_theme == 'dark' else 'rgba(0,0,0,0.1)',
+            borderwidth=1
+        ),
+        margin=dict(l=60, r=40, t=80, b=100)
     )
     
     return fig
+
+def get_players_for_labeling(df, highlighted_players, show_names, x_axis, y_axis):
+    """Determine which players should get labels based on show_names setting"""
+    if show_names == "Always":
+        # Limit to top 20 players by combined score to prevent performance issues
+        df_copy = df.copy()
+        df_copy['combined_score'] = (df_copy[x_axis] + df_copy[y_axis]) / 2
+        return df_copy.nlargest(20, 'combined_score')
+    elif show_names == "Only Highlighted":
+        if highlighted_players:
+            return df[df['Player Name'].isin(highlighted_players)]
+        else:
+            return pd.DataFrame()  # Empty if no highlights
+    else:  # Never - but still show highlighted players automatically
+        if highlighted_players:
+            return df[df['Player Name'].isin(highlighted_players)]
+        else:
+            return pd.DataFrame()  # Empty if no highlights
+
+def calculate_smart_label_positions(players_df, x_axis, y_axis):
+    """Calculate smart label positions to minimize overlaps"""
+    if len(players_df) == 0:
+        return {}
+    
+    positions = {}
+    
+    # Define possible label positions (offsets from point)
+    label_offsets = [
+        (20, 15),   # Top-right
+        (-20, 15),  # Top-left
+        (20, -15),  # Bottom-right
+        (-20, -15), # Bottom-left
+        (25, 0),    # Right
+        (-25, 0),   # Left
+        (0, 20),    # Top
+        (0, -20),   # Bottom
+    ]
+    
+    # For each player, find the best label position
+    for _, player_row in players_df.iterrows():
+        player_name = player_row['Player Name']
+        x_pos, y_pos = player_row[x_axis], player_row[y_axis]
+        
+        if pd.isna(x_pos) or pd.isna(y_pos):
+            continue
+        
+        # Find the best offset that minimizes conflicts
+        best_offset = label_offsets[0]  # Default to top-right
+        min_conflicts = float('inf')
+        
+        for offset in label_offsets:
+            conflicts = 0
+            label_x = x_pos + offset[0]
+            label_y = y_pos + offset[1]
+            
+            # Check conflicts with other players' positions
+            for _, other_row in players_df.iterrows():
+                if other_row['Player Name'] == player_name:
+                    continue
+                    
+                other_x, other_y = other_row[x_axis], other_row[y_axis]
+                if pd.isna(other_x) or pd.isna(other_y):
+                    continue
+                
+                # Calculate distance between label position and other points
+                distance = ((label_x - other_x) ** 2 + (label_y - other_y) ** 2) ** 0.5
+                if distance < 30:  # Threshold for conflict
+                    conflicts += 1
+            
+            if conflicts < min_conflicts:
+                min_conflicts = conflicts
+                best_offset = offset
+        
+        positions[player_name] = best_offset
+    
+    return positions
 
 def show_scatter_summary(df, x_axis, y_axis, highlighted_players, highlight_reasons):
     """Show summary statistics and highlighted players info"""
