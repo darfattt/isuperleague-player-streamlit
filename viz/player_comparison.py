@@ -209,6 +209,31 @@ def show_radar_comparison(comparison_df, filtered_df):
             "For negative metrics (Own Goal, Yellow Card, Foul, Shoot Off Target), lower actual values appear as higher scores. " +
             "Hover over data points to see actual values and normalized scores.")
 
+def display_player_header(player_data):
+    """Display player image and info header"""
+    
+    # Create columns for image and info
+    img_col, info_col = st.columns([1, 2])
+    
+    with img_col:
+        # Display player image
+        if player_data.get('Picture Url') and str(player_data['Picture Url']).strip() and str(player_data['Picture Url']) != 'nan':
+            try:
+                st.image(player_data['Picture Url'], width=80, caption="")
+            except:
+                # Fallback if image fails to load
+                st.write("🏃‍♂️")
+        else:
+            # Default placeholder
+            st.write("🏃‍♂️")
+    
+    with info_col:
+        # Player name as main header
+        st.markdown(f"**{player_data['Player Name']}**")
+        # Player details
+        st.caption(f"{player_data['Team']} | {player_data['Position']}")
+        st.caption(f"Age {player_data['Age']} | {player_data['Appearances']} apps")
+
 def show_bar_comparison(comparison_df, filtered_df):
     """Show horizontal bar charts organized by metric categories"""
     
@@ -228,6 +253,9 @@ def show_bar_comparison(comparison_df, filtered_df):
     for idx, (_, player_data) in enumerate(comparison_df.iterrows()):
         if idx < len(cols):
             with cols[idx]:
+                # Display player image and info header
+                display_player_header(player_data)
+                # Create the performance chart
                 create_player_performance_bar_chart(comparison_df, filtered_df, player_data, metric_categories)
 
 def create_player_performance_bar_chart(_comparison_df, filtered_df, player_data, metric_categories):
@@ -251,7 +279,7 @@ def create_player_performance_bar_chart(_comparison_df, filtered_df, player_data
                 if metric in NEGATIVE_METRICS:
                     percentile = 100 - percentile  # Invert for negative metrics
                 
-                # Use percentile for bar length (0-100 scale)
+                # Use percentile for bar length, with minimum of 1 for visibility
                 bar_length = max(percentile, 1)  # Ensure minimum bar length for visibility
                 
                 # Determine color based on percentile
@@ -310,6 +338,28 @@ def create_player_performance_bar_chart(_comparison_df, filtered_df, player_data
                 showlegend=False
             ))
     
+    # Add 50% percentile reference line
+    fig.add_shape(
+        type="line",
+        x0=50, y0=-0.5,
+        x1=50, y1=len(df_chart) - 0.5,
+        line=dict(color="#888888", width=1, dash="dash"),
+        opacity=0.6,
+        layer="below"
+    )
+    
+    # Add annotation for 50% line (at top)
+    fig.add_annotation(
+        x=50,
+        y=len(df_chart) - 0.3,
+        text="50%",
+        showarrow=False,
+        font=dict(size=10, color="#666666"),
+        xanchor="center",
+        yanchor="bottom"
+    )
+    
+    
     # Add category dividers
     prev_category = None
     for i, (_, row) in enumerate(df_chart.iterrows()):
@@ -327,7 +377,7 @@ def create_player_performance_bar_chart(_comparison_df, filtered_df, player_data
     
     # Update layout
     fig.update_layout(
-        title=f"<b>{player_name}</b>",
+        title="Performance Metrics",
         xaxis=dict(
             title="Performance Score",
             showgrid=True,
