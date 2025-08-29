@@ -6,6 +6,9 @@ from plotly.subplots import make_subplots
 import numpy as np
 from typing import List, Dict, Any
 
+# Define negative metrics for player data (lower values are better)
+PLAYER_NEGATIVE_METRICS = ['Own Goal', 'Yellow Card', 'Foul', 'Shoot Off Target']
+
 def detect_theme():
     """Detect if the current theme is light or dark"""
     try:
@@ -295,6 +298,224 @@ def create_performance_radar(teams_data: Dict[str, pd.DataFrame], league_df: pd.
     
     return fig
 
+def show_squad_list_table(team_df: pd.DataFrame, league_df: pd.DataFrame):
+    """Show comprehensive squad list with all players and their metrics"""
+    st.subheader("📋 Complete Squad List")
+    
+    # Get all metric columns (exclude info columns)
+    info_columns = ['Name', 'Player Name', 'Team', 'Country', 'Age', 'Position', 'Picture Url']
+    metric_columns = [col for col in team_df.columns if col not in info_columns]
+    
+    # Create display dataframe with essential info + all metrics (remove duplicates)
+    essential_info = ['Player Name', 'Position', 'Age', 'Team', 'Country', 'Appearances']
+    display_columns = essential_info + metric_columns
+    
+    # Remove duplicates while preserving order
+    seen = set()
+    display_columns = [col for col in display_columns if not (col in seen or seen.add(col))]
+    
+    # Filter to only existing columns
+    available_columns = [col for col in display_columns if col in team_df.columns]
+    squad_df = team_df[available_columns].copy()
+    
+    # Clean and validate the dataframe data types safely
+    for col in squad_df.columns:
+        if col not in squad_df.columns:
+            continue  # Skip non-existent columns
+            
+        try:
+            if col in ['Player Name', 'Position', 'Team', 'Country']:
+                # String columns - convert to string and fill NaN
+                squad_df[col] = squad_df[col].astype(str).replace('nan', 'Unknown').fillna('Unknown')
+            elif col in ['Age', 'Appearances'] or col in metric_columns:
+                # Ensure we have a valid Series before pd.to_numeric
+                if isinstance(squad_df[col], pd.Series) and len(squad_df[col]) > 0:
+                    squad_df[col] = pd.to_numeric(squad_df[col], errors='coerce').fillna(0)
+                else:
+                    squad_df[col] = 0  # Default value for invalid columns
+        except Exception as e:
+            # Set safe default value for problematic columns
+            if col in ['Player Name', 'Position', 'Team', 'Country']:
+                squad_df[col] = 'Unknown'
+            else:
+                squad_df[col] = 0
+    
+    # Remove any completely empty columns
+    squad_df = squad_df.dropna(axis=1, how='all')
+    
+    # Sort by position order
+    position_order = {'P. GAWANG': 0, 'BELAKANG': 1, 'TENGAH': 2, 'DEPAN': 3}
+    squad_df['_position_order'] = squad_df['Position'].map(position_order).fillna(4)
+    squad_df = squad_df.sort_values(['_position_order', 'Player Name']).drop('_position_order', axis=1)
+    squad_df = squad_df.reset_index(drop=True)
+    
+    # Display metrics summary
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Players", len(squad_df))
+    with col2:
+        avg_age = squad_df['Age'].mean() if 'Age' in squad_df.columns else 0
+        st.metric("Average Age", f"{avg_age:.1f}")
+    with col3:
+        total_goals = squad_df['Goal'].sum() if 'Goal' in squad_df.columns else 0
+        st.metric("Squad Goals", int(total_goals))
+    with col4:
+        total_assists = squad_df['Assist'].sum() if 'Assist' in squad_df.columns else 0
+        st.metric("Squad Assists", int(total_assists))
+    
+    # Validate dataframe before display
+    if squad_df.empty:
+        st.warning("No player data available for this team")
+        return
+    
+    # Display the comprehensive table with error handling
+    try:
+        st.dataframe(
+            squad_df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Player Name": st.column_config.TextColumn("Player", width="medium"),
+                "Position": st.column_config.TextColumn("Pos", width="small"),
+                "Age": st.column_config.NumberColumn("Age", width="small"),
+                "Appearances": st.column_config.NumberColumn("Apps", width="small")
+            }
+        )
+    except Exception as e:
+        st.warning(f"Display issue with advanced formatting. Showing basic table instead.")
+        # Fallback to basic dataframe without column configuration
+        st.dataframe(squad_df, use_container_width=True, hide_index=True)
+    
+    # Position breakdown
+    st.write("### 👥 Squad Composition by Position")
+    position_counts = squad_df['Position'].value_counts()
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        # Position distribution chart
+        fig = px.pie(
+            values=position_counts.values, 
+            names=position_counts.index,
+            title="Position Distribution"
+        )
+        fig.update_layout(height=300)
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        # Position breakdown table
+        position_breakdown = pd.DataFrame({
+            'Position': position_counts.index,
+            'Count': position_counts.values,
+            'Percentage': (position_counts.values / len(squad_df) * 100).round(1)
+        })
+        st.dataframe(position_breakdown, hide_index=True, use_container_width=True)
+
+def show_squad_heatmap(team_df: pd.DataFrame, league_df: pd.DataFrame):
+    """Show squad heatmap with players sorted by position and metrics by category"""
+    from utils.data_loader import get_player_metric_categories
+    
+    st.subheader("🔥 Squad Performance Heatmap")
+    
+    # Get metric categories
+    try:
+        metric_categories = get_player_metric_categories()
+    except:
+        # Fallback if function not available
+        metric_categories = {
+            'Attack': ['Goal', 'Assist', 'Shoot On Target'],
+            'Defense': ['Tackle', 'Intercept', 'Block'],
+            'Progression': ['Passing', 'Cross'],
+            'Discipline': ['Yellow Card', 'Foul'],
+            'Goalkeeper': ['Saves']
+        }
+    
+    # Order metrics by category
+    category_order = ['Goalkeeper', 'Defense', 'Discipline', 'Progression', 'Attack']
+    ordered_metrics = []
+    
+    for category in category_order:
+        if category in metric_categories:
+            for metric in metric_categories[category]:
+                if metric in team_df.columns:
+                    ordered_metrics.append(metric)
+    
+    # Add any remaining metrics not in categories
+    all_metric_columns = [col for col in team_df.columns 
+                         if col not in ['Name', 'Player Name', 'Team', 'Country', 'Age', 'Position', 'Picture Url']]
+    for metric in all_metric_columns:
+        if metric not in ordered_metrics:
+            ordered_metrics.append(metric)
+    
+    if not ordered_metrics:
+        st.warning("No metrics available for heatmap display")
+        return
+    
+    # Sort players by position
+    position_order = {'P. GAWANG': 0, 'BELAKANG': 1, 'TENGAH': 2, 'DEPAN': 3}
+    team_df_sorted = team_df.copy()
+    team_df_sorted['_position_order'] = team_df_sorted['Position'].map(position_order).fillna(4)
+    team_df_sorted = team_df_sorted.sort_values(['_position_order', 'Player Name'])
+    
+    # Create normalized data with per-metric scaling
+    normalized_data = pd.DataFrame(index=team_df_sorted.index, columns=ordered_metrics)
+    
+    for col in ordered_metrics:
+        col_min = team_df_sorted[col].min()
+        col_max = team_df_sorted[col].max()
+        
+        if col_max == col_min:  # Handle case where all values are the same
+            normalized_data[col] = 50  # Set to middle value
+        else:
+            if col in PLAYER_NEGATIVE_METRICS:
+                # For negative metrics, invert normalization (lower values = better = higher score)
+                normalized_data[col] = 100 - ((team_df_sorted[col] - col_min) / (col_max - col_min) * 100)
+            else:
+                # For positive metrics, normal normalization (higher values = better = higher score)
+                normalized_data[col] = (team_df_sorted[col] - col_min) / (col_max - col_min) * 100
+    
+    # Create heatmap
+    fig = px.imshow(
+        normalized_data.values,
+        labels=dict(x="Metrics", y="Players", color="Normalized Score (0-100)"),
+        x=ordered_metrics,
+        y=team_df_sorted['Player Name'],
+        aspect="auto",
+        color_continuous_scale='RdYlGn',  # Red (poor) to Green (good)
+        zmin=0,
+        zmax=100,
+        text_auto=False
+    )
+    
+    # Add text annotations with actual values
+    actual_values = team_df_sorted[ordered_metrics].values
+    text_annotations = [[f"{int(val)}" for val in row] for row in actual_values]
+    
+    fig.update_traces(
+        text=text_annotations,
+        texttemplate="%{text}",
+        textfont={"size": 8, "color": "black"},
+        hovertemplate="<b>%{y}</b><br>%{x}<br>Value: %{text}<br>Normalized: %{z:.0f}<extra></extra>"
+    )
+    
+    fig.update_layout(
+        title=f"Squad Performance Heatmap - {team_df_sorted['Team'].iloc[0]}",
+        height=max(500, len(team_df_sorted) * 30),  # Adjust height based on number of players
+        xaxis_title="Performance Metrics (by Category)",
+        yaxis_title="Players (by Position)"
+    )
+    
+    # Rotate x-axis labels for better readability
+    fig.update_xaxes(tickangle=45)
+    
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Add explanation
+    st.info("💡 **Squad Heatmap Guide**: Players are sorted by position (GK → DEF → MID → FWD), " +
+            "metrics organized by category (Goalkeeper → Defense → Discipline → Progression → Attack). " +
+            "Green = Better performance, Red = Poorer performance. " +
+            "For negative metrics (fouls, cards, etc.), lower actual values appear green. " +
+            "Hover for detailed values.")
+
 def render_team_analysis(df: pd.DataFrame):
     """Main function to render team analysis"""
     
@@ -556,8 +777,10 @@ def render_team_profile(team_name: str, team_df: pd.DataFrame, league_df: pd.Dat
                 )
     
     # Tabs for detailed analysis
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "👥 Players by Position", 
+        "📋 Squad List",
+        "🔥 Squad Heatmap",
         "📊 Performance Analysis", 
         "📈 Strengths & Weaknesses",
         "📋 Squad Overview"
@@ -590,6 +813,12 @@ def render_team_profile(team_name: str, team_df: pd.DataFrame, league_df: pd.Dat
             st.info("No standout players identified in specific positions based on current criteria.")
     
     with tab2:
+        show_squad_list_table(team_df, league_df)
+    
+    with tab3:
+        show_squad_heatmap(team_df, league_df)
+    
+    with tab4:
         st.subheader("📊 Detailed Performance Analysis")
         fig = create_team_performance_bars(team_df, league_df)
         if fig.data:
@@ -598,7 +827,7 @@ def render_team_profile(team_name: str, team_df: pd.DataFrame, league_df: pd.Dat
         else:
             st.warning("No performance data available for visualization.")
     
-    with tab3:
+    with tab5:
         st.subheader("⚖️ Strengths & Weaknesses Analysis")
         analysis = calculate_team_strengths_weaknesses(team_df, league_df)
         
@@ -622,7 +851,7 @@ def render_team_profile(team_name: str, team_df: pd.DataFrame, league_df: pd.Dat
             else:
                 st.info("No significant weaknesses identified")
     
-    with tab4:
+    with tab6:
         st.subheader("📋 Squad Distribution")
         col1, col2 = st.columns(2)
         with col1:

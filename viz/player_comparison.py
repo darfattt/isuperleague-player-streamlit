@@ -213,7 +213,7 @@ def display_player_header(player_data):
     """Display player image and info header"""
     
     # Create columns for image and info
-    img_col, info_col = st.columns([1, 2])
+    img_col, info_col = st.columns([1, 3])
     
     with img_col:
         # Display player image
@@ -230,9 +230,10 @@ def display_player_header(player_data):
     with info_col:
         # Player name as main header
         st.markdown(f"**{player_data['Player Name']}**")
-        # Player details
+        # Line 2: Team and Position
         st.caption(f"{player_data['Team']} | {player_data['Position']}")
-        st.caption(f"Age {player_data['Age']} | {player_data['Appearances']} apps")
+        # Line 3: Country, Age, and Appearances
+        st.caption(f"{player_data['Country']} | {player_data['Age']} Years | {player_data['Appearances']} Apps")
 
 def show_bar_comparison(comparison_df, filtered_df):
     """Show horizontal bar charts organized by metric categories"""
@@ -279,20 +280,25 @@ def create_player_performance_bar_chart(_comparison_df, filtered_df, player_data
                 if metric in NEGATIVE_METRICS:
                     percentile = 100 - percentile  # Invert for negative metrics
                 
-                # Use percentile for bar length, with minimum of 1 for visibility
-                bar_length = max(percentile, 1)  # Ensure minimum bar length for visibility
-                
-                # Determine color based on percentile
-                if percentile >= 81:
-                    color = '#1a9641'  # Dark green
-                elif percentile >= 61:
-                    color = '#73c378'  # Light green
-                elif percentile >= 41:
-                    color = '#f9d057'  # Yellow
-                elif percentile >= 21:
-                    color = '#fc8d59'  # Orange
+                # Handle zero values specially
+                if current_value == 0:
+                    bar_length = 0  # Zero values show as 0% bars
+                    color = '#cccccc'  # Gray color for zero values
                 else:
-                    color = '#d73027'  # Red
+                    # Use percentile for bar length, with minimum of 1 for visibility
+                    bar_length = max(percentile, 1)  # Ensure minimum bar length for visibility
+                    
+                    # Determine color based on percentile
+                    if percentile >= 81:
+                        color = '#1a9641'  # Dark green
+                    elif percentile >= 61:
+                        color = '#73c378'  # Light green
+                    elif percentile >= 41:
+                        color = '#f9d057'  # Yellow
+                    elif percentile >= 21:
+                        color = '#fc8d59'  # Orange
+                    else:
+                        color = '#d73027'  # Red
                 
                 chart_data.append({
                     'Metric': metric,
@@ -303,7 +309,7 @@ def create_player_performance_bar_chart(_comparison_df, filtered_df, player_data
                     'Category': category,
                     'CategoryOrder': category_order.get(category, 5),
                     'MetricOrder': metric_idx,
-                    'HoverText': f"{metric}<br>Value: {current_value:.1f}<br>Percentile: {percentile:.0f}%"
+                    'HoverText': f"{metric}<br>Value: {int(current_value)}<br>Percentile: {percentile:.0f}%"
                 })
     
     # Create DataFrame and sort
@@ -329,7 +335,7 @@ def create_player_performance_bar_chart(_comparison_df, filtered_df, player_data
                     color=category_df['Color'],
                     line=dict(width=0.5, color='white')
                 ),
-                text=[f"{val:.1f}" if val > 0 else "0" for val in category_df['Value']],
+                text=[f"{int(val)}" for val in category_df['Value']],
                 textposition='inside',
                 textfont=dict(color='white', size=11, family='Arial Black'),
                 hovertext=category_df['HoverText'],
