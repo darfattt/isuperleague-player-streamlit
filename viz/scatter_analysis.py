@@ -48,19 +48,24 @@ def get_theme_colors(theme='light'):
 def show_scatter_analysis(filtered_df):
     """
     Advanced scatter plot analysis for player performance data
-    
+
     Features:
     - X/Y axis selection from available metrics
     - Multiple highlighting options (players, teams, performance, age)
     - Interactive hover with player details
     - Trend lines and median lines
     - Professional styling consistent with dashboard theme
+    - Includes players with 0-value metrics (not filtered out)
+    - Groups overlapping players with smart labeling
     """
     st.header("🎯 Advanced Scatter Analysis")
-    
+
     if len(filtered_df) == 0:
         st.warning("⚠️ No players match the current filters. Please adjust your filter criteria in the sidebar.")
         return
+
+    # Ensure 0-value metrics are explicitly preserved in analysis
+    # Note: filtered_df should include players with 0 values for comprehensive analysis
     
     # Get available metric columns (exclude info columns)
     info_columns = ['Name', 'Player Name', 'Team', 'Country', 'Age', 'Position', 'Picture Url']
@@ -359,7 +364,21 @@ def create_advanced_scatter_plot(df, x_axis, y_axis, highlighted_players, highli
     subtitle_color = theme_colors['subtitle_text'] # Subtitle color
     point_border = theme_colors['point_border']    # Point border color
     bg_color = theme_colors['background']          # Background color
-    
+
+    # Smart labeling with overlap prevention and grouping (moved to beginning)
+    players_to_label = get_players_for_labeling(df, highlighted_players, show_names, x_axis, y_axis)
+
+    # Create grouped player information for enhanced hover templates
+    player_groups = {}
+    grouped_labels = {}
+
+    if len(players_to_label) > 0:
+        # Group overlapping players
+        player_groups = group_overlapping_players(players_to_label, x_axis, y_axis)
+
+        # Create grouped labels
+        grouped_labels = create_grouped_labels(player_groups, players_to_label, highlighted_players, x_axis, y_axis)
+
     # Add non-highlighted players first (so they appear behind highlighted ones)
     non_highlighted_df = df[~df['Player Name'].isin(highlighted_players)]
     
@@ -375,11 +394,7 @@ def create_advanced_scatter_plot(df, x_axis, y_axis, highlighted_players, highli
                 line=dict(width=1, color=point_border)  # Theme-aware border color
             ),
             text=[
-                f"<b style='color: {text_color}'>{row['Player Name']}</b><br>"
-                f"<span style='color: {subtitle_color}'>Team: {row['Team']}</span><br>"
-                f"<span style='color: {subtitle_color}'>Position: {row['Position']}</span><br>"
-                f"<span style='color: {subtitle_color}'>{x_axis}: {row[x_axis]:.1f}</span><br>"
-                f"<span style='color: {subtitle_color}'>{y_axis}: {row[y_axis]:.1f}</span>"
+                create_enhanced_hover_text(row, x_axis, y_axis, player_groups, theme_colors)
                 for _, row in non_highlighted_df.iterrows()
             ],
             hovertemplate='%{text}<extra></extra>',
@@ -436,13 +451,8 @@ def create_advanced_scatter_plot(df, x_axis, y_axis, highlighted_players, highli
                 line=dict(width=2, color=point_border)  # Theme-aware border color
             ),
             text=[
-                f"<b style='color: {text_color}'>{row['Player Name']}</b><br>"
-                f"<span style='color: {subtitle_color}'>Team: {row['Team']}</span><br>"
-                f"<span style='color: {subtitle_color}'>Position: {row['Position']}</span><br>"
-                f"<span style='color: {subtitle_color}'>Age: {row['Age']}</span><br>"
-                f"<span style='color: {subtitle_color}'>{x_axis}: {row[x_axis]:.1f}</span><br>"
-                f"<span style='color: {subtitle_color}'>{y_axis}: {row[y_axis]:.1f}</span><br>"
-                f"<span style='color: {professional_color}; font-weight: bold'>Highlight: {highlight_reasons.get(row['Player Name'], 'Unknown')}</span>"
+                create_enhanced_hover_text(row, x_axis, y_axis, player_groups, theme_colors) +
+                f"<br><span style='color: {professional_color}; font-weight: bold'>Highlight: {highlight_reasons.get(row['Player Name'], 'Unknown')}</span>"
                 for _, row in highlighted_subset.iterrows()
             ],
             hovertemplate='%{text}<extra></extra>',
@@ -496,39 +506,25 @@ def create_advanced_scatter_plot(df, x_axis, y_axis, highlighted_players, highli
             annotation_position="right"
         )
     
-    # Smart labeling with overlap prevention
-    players_to_label = get_players_for_labeling(df, highlighted_players, show_names, x_axis, y_axis)
-    
-    if len(players_to_label) > 0:
-        # Apply smart label positioning
-        label_positions = calculate_smart_label_positions(players_to_label, x_axis, y_axis)
-        
-        for _, player_row in players_to_label.iterrows():
-            player_name = player_row['Player Name']
-            if player_name in label_positions:
-                x_pos, y_pos = player_row[x_axis], player_row[y_axis]
-                x_offset, y_offset = label_positions[player_name]
-                
-                # Ensure we have valid coordinates
-                if pd.isna(x_pos) or pd.isna(y_pos):
-                    continue
-                
-                # Use red color for highlighted players, theme-aware color for others
-                label_color = '#DC143C' if player_name in highlighted_players else text_color
-                
-                fig.add_annotation(
-                    x=x_pos,
-                    y=y_pos,
-                    text=f"<b>{player_name}</b>",
-                    showarrow=False,
-                    font=dict(
-                        size=10,
-                        color=label_color,
-                        family='Arial'
-                    ),
-                    xshift=x_offset,
-                    yshift=y_offset
-                )
+    # Add annotations for each group's primary player (using previously computed grouped_labels)
+    if len(grouped_labels) > 0:
+        for primary_player, label_info in grouped_labels.items():
+            # Use red color for highlighted players, theme-aware color for others
+            label_color = '#DC143C' if primary_player in highlighted_players else text_color
+
+            fig.add_annotation(
+                x=label_info['x_pos'],
+                y=label_info['y_pos'],
+                text=label_info['label_text'],
+                showarrow=False,
+                font=dict(
+                    size=10,
+                    color=label_color,
+                    family='Arial'
+                ),
+                xshift=label_info['x_offset'],
+                yshift=label_info['y_offset']
+            )
     
     # Create contextual subtitle with data information
     position_info = df['Position'].unique()
@@ -664,6 +660,218 @@ def calculate_smart_label_positions(players_df, x_axis, y_axis):
         positions[player_name] = best_offset
     
     return positions
+
+def group_overlapping_players(players_df, x_axis, y_axis, threshold_percentage=0.02):
+    """
+    Group players that are at similar coordinates to prevent label overlap
+
+    Args:
+        players_df: DataFrame of players to label
+        x_axis, y_axis: The metrics being plotted
+        threshold_percentage: Percentage of axis range to consider as "overlapping" (default 2%)
+
+    Returns:
+        Dict mapping group_id to list of player names in that group
+    """
+    if len(players_df) == 0:
+        return {}
+
+    # Calculate thresholds based on data range
+    x_range = players_df[x_axis].max() - players_df[x_axis].min()
+    y_range = players_df[y_axis].max() - players_df[y_axis].min()
+
+    x_threshold = x_range * threshold_percentage if x_range > 0 else 1
+    y_threshold = y_range * threshold_percentage if y_range > 0 else 1
+
+    # Group players by proximity
+    groups = {}
+    group_id = 0
+    assigned_players = set()
+
+    for _, player_row in players_df.iterrows():
+        player_name = player_row['Player Name']
+        if player_name in assigned_players:
+            continue
+
+        x_pos, y_pos = player_row[x_axis], player_row[y_axis]
+        if pd.isna(x_pos) or pd.isna(y_pos):
+            continue
+
+        # Find all players within threshold
+        current_group = [player_name]
+        assigned_players.add(player_name)
+
+        for _, other_row in players_df.iterrows():
+            other_name = other_row['Player Name']
+            if other_name in assigned_players:
+                continue
+
+            other_x, other_y = other_row[x_axis], other_row[y_axis]
+            if pd.isna(other_x) or pd.isna(other_y):
+                continue
+
+            # Check if within threshold
+            if (abs(x_pos - other_x) <= x_threshold and
+                abs(y_pos - other_y) <= y_threshold):
+                current_group.append(other_name)
+                assigned_players.add(other_name)
+
+        groups[group_id] = current_group
+        group_id += 1
+
+    return groups
+
+def get_primary_player_from_group(group_players, players_df, highlighted_players, x_axis, y_axis):
+    """
+    Select the primary player to represent a group of overlapping players
+
+    Priority:
+    1. Highlighted players (if any in group)
+    2. Player with highest combined score
+    3. Alphabetical order (as fallback)
+    """
+    group_df = players_df[players_df['Player Name'].isin(group_players)]
+
+    # Priority 1: Highlighted players
+    highlighted_in_group = [p for p in group_players if p in highlighted_players]
+    if highlighted_in_group:
+        # If multiple highlighted, pick the one with highest combined score
+        highlighted_df = group_df[group_df['Player Name'].isin(highlighted_in_group)]
+        highlighted_df = highlighted_df.copy()
+        highlighted_df['combined_score'] = (highlighted_df[x_axis] + highlighted_df[y_axis]) / 2
+        return highlighted_df.loc[highlighted_df['combined_score'].idxmax(), 'Player Name']
+
+    # Priority 2: Highest combined score
+    group_df = group_df.copy()
+    group_df['combined_score'] = (group_df[x_axis] + group_df[y_axis]) / 2
+    return group_df.loc[group_df['combined_score'].idxmax(), 'Player Name']
+
+def create_grouped_labels(player_groups, players_df, highlighted_players, x_axis, y_axis):
+    """
+    Create label text and positions for grouped players
+
+    Returns:
+        Dict mapping primary_player_name to (label_text, x_pos, y_pos, x_offset, y_offset)
+    """
+    grouped_labels = {}
+
+    # Define possible label positions (offsets from point)
+    label_offsets = [
+        (20, 15),   # Top-right
+        (-20, 15),  # Top-left
+        (20, -15),  # Bottom-right
+        (-20, -15), # Bottom-left
+        (25, 0),    # Right
+        (-25, 0),   # Left
+        (0, 20),    # Top
+        (0, -20),   # Bottom
+    ]
+
+    used_positions = []
+
+    for group_id, group_players in player_groups.items():
+        if len(group_players) == 0:
+            continue
+
+        # Get primary player for this group
+        primary_player = get_primary_player_from_group(
+            group_players, players_df, highlighted_players, x_axis, y_axis
+        )
+
+        # Get position from primary player
+        primary_row = players_df[players_df['Player Name'] == primary_player].iloc[0]
+        x_pos, y_pos = primary_row[x_axis], primary_row[y_axis]
+
+        if pd.isna(x_pos) or pd.isna(y_pos):
+            continue
+
+        # Create label text
+        if len(group_players) == 1:
+            label_text = f"<b>{primary_player}</b>"
+        else:
+            additional_count = len(group_players) - 1
+            label_text = f"<b>{primary_player}</b><br><span style='font-size: 8px'>+{additional_count} more player{'s' if additional_count > 1 else ''}</span>"
+
+        # Find best offset to avoid conflicts with other labels
+        best_offset = label_offsets[0]
+        min_conflicts = float('inf')
+
+        for offset in label_offsets:
+            conflicts = 0
+            test_pos = (x_pos + offset[0], y_pos + offset[1])
+
+            for used_pos in used_positions:
+                distance = ((test_pos[0] - used_pos[0]) ** 2 + (test_pos[1] - used_pos[1]) ** 2) ** 0.5
+                if distance < 40:  # Increased threshold for label separation
+                    conflicts += 1
+
+            if conflicts < min_conflicts:
+                min_conflicts = conflicts
+                best_offset = offset
+
+        used_positions.append((x_pos + best_offset[0], y_pos + best_offset[1]))
+
+        grouped_labels[primary_player] = {
+            'label_text': label_text,
+            'x_pos': x_pos,
+            'y_pos': y_pos,
+            'x_offset': best_offset[0],
+            'y_offset': best_offset[1],
+            'group_players': group_players,
+            'is_primary': True
+        }
+
+    return grouped_labels
+
+def create_enhanced_hover_text(row, x_axis, y_axis, player_groups, theme_colors):
+    """
+    Create enhanced hover text that shows grouped players if applicable
+
+    Args:
+        row: DataFrame row for the current player
+        x_axis, y_axis: The metrics being plotted
+        player_groups: Dict of grouped players
+        theme_colors: Theme color dictionary
+
+    Returns:
+        Enhanced hover text string
+    """
+    player_name = row['Player Name']
+    text_color = theme_colors['text']
+    subtitle_color = theme_colors['subtitle_text']
+
+    # Find if this player is part of a group
+    player_group = None
+    for group_id, group_players in player_groups.items():
+        if player_name in group_players:
+            player_group = group_players
+            break
+
+    # Base player information
+    hover_text = (
+        f"<b style='color: {text_color}'>{player_name}</b><br>"
+        f"<span style='color: {subtitle_color}'>Team: {row['Team']}</span><br>"
+        f"<span style='color: {subtitle_color}'>Position: {row['Position']}</span><br>"
+        f"<span style='color: {subtitle_color}'>Age: {row['Age']}</span><br>"
+        f"<span style='color: {subtitle_color}'>{x_axis}: {row[x_axis]:.1f}</span><br>"
+        f"<span style='color: {subtitle_color}'>{y_axis}: {row[y_axis]:.1f}</span>"
+    )
+
+    # Add grouped player information if applicable
+    if player_group and len(player_group) > 1:
+        other_players = [p for p in player_group if p != player_name]
+        if len(other_players) <= 3:
+            # Show all players if 3 or fewer
+            hover_text += f"<br><br><span style='color: {subtitle_color}; font-size: 10px'><b>Nearby Players:</b><br>"
+            hover_text += "<br>".join(other_players)
+            hover_text += "</span>"
+        else:
+            # Show first 2 and count
+            hover_text += f"<br><br><span style='color: {subtitle_color}; font-size: 10px'><b>Nearby Players:</b><br>"
+            hover_text += "<br>".join(other_players[:2])
+            hover_text += f"<br>+{len(other_players) - 2} more players</span>"
+
+    return hover_text
 
 def show_scatter_summary(df, x_axis, y_axis, highlighted_players, highlight_reasons):
     """Show summary statistics and highlighted players info"""
