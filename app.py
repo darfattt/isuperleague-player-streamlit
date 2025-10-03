@@ -14,6 +14,7 @@ from viz.scatter_analysis import show_scatter_analysis
 from viz.player_report import show_player_report
 from viz.player_screener import show_player_screener
 from viz.team_analysis import render_team_analysis
+from viz.team_overview import render_team_overview
 #from viz.ai_analyst import main as render_ai_analyst
 
 # Global stats calculation functions
@@ -397,7 +398,7 @@ def main():
     
     page = st.sidebar.selectbox(
         "Select Page",
-        ["📈 Player Performance", "🔄 Player Comparison", "🎯 Profile Finder", "📊 Scatter Analysis", "👤 Player Report", "🔍 Player Screener", "⚽ Team Analysis"],
+        ["📈 Player Performance", "🔄 Player Comparison", "🎯 Profile Finder", "📊 Scatter Analysis", "👤 Player Report", "🔍 Player Screener", "⚽ Team Analysis", "🏆 Team Overview"],
         index=0
     )
     
@@ -532,6 +533,8 @@ def main():
         show_player_screener(filtered_df)
     elif page == "⚽ Team Analysis":
         render_team_analysis(filtered_df)
+    elif page == "🏆 Team Overview":
+        render_team_overview()
     # elif page == "🤖 AI Analyst":
     #     # AI Analyst needs unfiltered data for its own analysis and filtering
     #     render_ai_analyst_page(df)
